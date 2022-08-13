@@ -77,7 +77,7 @@ if calibrated_folder == 'custom':
 orca.add_injectable('data_name', data_name)
 
 # Downloading the household totals, income rates, and move in rates
-hhsize_data_name = "data/hsize_ct_%s.csv" % region_code
+hhsize_data_name = "data/%s/hsize_ct_%s.csv" % (region_code, region_code)
 hhsize_data = pd.read_csv(hhsize_data_name)
 hhsize_data = hhsize_data.set_index("year")
 orca.add_table("hsize_ct", hhsize_data)
@@ -102,7 +102,7 @@ if not all_local:
     else:
         print("Not downloading model_data.h5, since already exists")
 else:
-    if not os.path.exists("data/%s" % data_name):
+    if not os.path.exists("data/%s/%s" % (region_code, data_name)):
         raise OSError("No input data found at data/%s" % data_name)
 
 # -----------------------------------------------------------------------------------------
@@ -151,23 +151,10 @@ for table_name in hdf_tables:
         name=step_name,
     ).run()
 
-store = pd.HDFStore(hdf_path)
-if "/metadata" in store.keys():
-    hdf_tables += ["metadata"]
-store.close()
-
-for table_name in hdf_tables:
-    step_name = "load_" + table_name
-    LoadTable(
-        table=table_name,
-        source_type="hdf",
-        path=hdf_path,
-        extra_settings={"key": table_name},
-        name=step_name,
-    ).run()
 
 if "metadata" not in orca.list_tables():
     metadata = pd.DataFrame(columns=["value"], index=["max_p_id", "max_hh_id"])
+    print(orca.list_tables())
     max_p_id = orca.get_table("persons").local.index.max()
     metadata.loc["max_p_id", "value"] = max_p_id
     max_hh_id = orca.get_table("households").local.index.max()

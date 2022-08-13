@@ -356,6 +356,7 @@ def marital2(persons):
 @orca.column('persons')
 def marital3(persons):
     p = persons.to_frame(columns=['MAR'])
+    print(persons.local.columns)
     return p.eq(3) * 1
 
 
@@ -1677,6 +1678,8 @@ def register_predominant_building_type_cat(building_type):
 
 def register_sub_skim(threshold, impedance_column, units, sub_skim_name):
     travel_data = orca.get_table('travel_data').to_frame().reset_index(level=1)
+    print(travel_data.columns)
+    print(travel_data.index)
     if units == 'km':
         threshold = threshold * 0.621
     travel_data = travel_data[travel_data[impedance_column] < threshold]
@@ -1703,6 +1706,9 @@ def register_skim_var(table_name, column_name, threshold, var, impedance_column,
         zones_table = orca.get_table(table_name).to_frame(var)
         zones_table.index.names = ['zone_id']
         zones_table = zones_table.reset_index()
+        travel_data["to_zone_id"] = travel_data["to_zone_id"].astype(int) ## Austin vs Bay Area specific, data types need fixing
+        print(travel_data.head())
+        print(zones_table.dtypes)
         travel_data["to_zone_id"] = travel_data["to_zone_id"].astype(int)
         travel_data = travel_data.reset_index().merge(zones_table, how='left', left_on='to_zone_id', right_on='zone_id')
         travel_data = travel_data.set_index(['from_zone_id'])
@@ -1735,6 +1741,7 @@ def register_disag_var(table_from, table_to, column_name, prefix=True):
         disag_col_name = column_name
     @orca.column(table_to, disag_col_name, cache=True, cache_scope='iteration')
     def column_func():
+        print(column_name)
         from_df = orca.get_table(table_from).to_frame(column_name)
         from_idx = from_df.index.name
         to_df = orca.get_table(table_to).to_frame(from_idx)
@@ -1784,6 +1791,10 @@ def register_ln_variable(table_name, col):
 def register_standardized_variable(table_name, col):
     @orca.column(table_name, 'st_' + col, cache=True, cache_scope='iteration')
     def column_func():
+        print("here", str(table_name))
+        print('st_' + col)
+        print(table_name)
+        print(col)
         df = orca.get_table(table_name).to_frame(col)
         df['st_col'] = (df[col] - df[col].mean())/df[col].std()
         return df['st_col'].fillna(1)
