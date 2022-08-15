@@ -109,8 +109,9 @@ if __name__ == '__main__':
     random_match = args.random_matching if args.random_matching else False
     skim_source = args.travel_model if args.travel_model else 'beam'
     scenario_name = args.scenario_name if args.scenario_name else False
-    output_fname = args.output_fname if args.output_fname \
-        else "data/model_data_"+str(scenario_name)+"_"+"{0}.h5".format(forecast_year)
+    output_fname = "data/model_data_"+ str(region_code) + "_" + str(scenario_name)+"_"+"{0}.h5".format(forecast_year) if args.scenario_name \
+        else "data/model_data_"+str(region_code)+"_"+"{0}.h5".format(forecast_year)
+    print("OUTPUT FILENAME IS:",output_fname)
 
     run(
         region_code, initial_run, base_year, forecast_year, random_seed,

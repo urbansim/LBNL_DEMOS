@@ -78,12 +78,12 @@ def build_networks(blocks, block_groups, nodes, edges):
     orca.add_injectable("net", net)
 
 
-def read_yaml(path):
-    """A function to read YAML file"""
-    with open(path) as f:
-        config = list(yaml.safe_load_all(f))[0]
+# def read_yaml(path):
+#     """A function to read YAML file"""
+#     with open(path) as f:
+#         config = list(yaml.safe_load_all(f))[0]
 
-    return config
+#     return config
 
 
 def simulation_mnl(data, coeffs):
@@ -496,6 +496,7 @@ def rez(group):
     # Function to map the relation of new head
     map_func = produce_map_func(group.loc[new_head_idx, "relate"])
     group.loc[new_head_idx, "relate"] = 0
+    # breakpoint()
     group.relate = group.relate.map(map_func)
     return group
 
@@ -551,10 +552,11 @@ def produce_map_func(old_role):
     sold_role = str(old_role)
  
     def inner(role):
-        rel_map = orca.get_table("rel_map")
+        rel_map = orca.get_table("rel_map").to_frame()
         if role == 0:
-            return 0
-        new_role = rel_map.loc[role, sold_role]
+            new_role = 0
+        else:
+            new_role = rel_map.loc[role, sold_role]
         return new_role
 
     # Returns function that takes a persons old role and gives them a new one based on how the household is restructured
@@ -701,19 +703,19 @@ def update_education_status(persons, student_list, year):
             data={"year": [year], "count": [students.shape[0]]}
         )
         students = pd.concat([student_population, student_population_new])
-    if edu_over_time.empty:
-        edu_over_time = pd.DataFrame(
-            data={"year": [year], "mean_age_of_students": [students["age"].mean()]}
-        )
-    else:
-        edu_over_time = edu_over_time.append(
-            pd.DataFrame(
-                {"year": [year], "mean_age_of_students": [students["age"].mean()]}
-            ),
-            ignore_index=True,
-        )
+    # if edu_over_time.empty:
+    #     edu_over_time = pd.DataFrame(
+    #         data={"year": [year], "mean_age_of_students": [students["age"].mean()]}
+    #     )
+    # else:
+    #     edu_over_time = edu_over_time.append(
+    #         pd.DataFrame(
+    #             {"year": [year], "mean_age_of_students": [students["age"].mean()]}
+    #         ),
+    #         ignore_index=True,
+    #     )
 
-    orca.add_table("edu_over_time", edu_over_time)
+    # orca.add_table("edu_over_time", edu_over_time)
     orca.add_table("student_population", student_population)
 
 
@@ -1285,9 +1287,7 @@ def marriage_model(persons, households):
     persons_cols = persons.local_columns
     persons_local_cols = persons.local_columns
 
-    marriage_model = read_yaml(
-        "configs/calibrated_configs/custom/06197001/marriage.yml"
-    )
+    marriage_model = orca.get_injectable("marriage_model")
     marriage_coeffs = pd.DataFrame(marriage_model["model_coeffs"])
     marriage_variables = pd.DataFrame(marriage_model["spec_names"])
     model_columns = marriage_variables[0].values.tolist()
@@ -2411,9 +2411,8 @@ def cohabitation_model(persons, households):
     hh_df = households.to_frame(columns=["lcm_county_id"])
     hh_df.reset_index(inplace=True)
     hh_local_cols = orca.get_table("households").local_columns
-    cohabitation_model = read_yaml(
-        "configs/calibrated_configs/custom/06197001/cohabitation.yaml"
-    )
+    
+    cohabitation_model = orca.get_injectable("cohabitation_model")
     cohabitation_coeffs = pd.DataFrame(cohabitation_model["model_coeffs"])
     cohabitation_variables = pd.DataFrame(cohabitation_model["spec_names"])
     model_columns = cohabitation_variables[0].values.tolist()
@@ -2960,7 +2959,7 @@ def full_transition(
         copied = pd.Index([])
         removed = pd.Index([])
         ct["lcm_county_id"] = ct["lcm_county_id"].astype(str)
-        # ct["lcm_county_id"] = "0" + ct["lcm_county_id"].astype(str)
+        ct["lcm_county_id"] = "0" + ct["lcm_county_id"].astype(str)
         max_hh_id = agnt.index.max()
         for size in hh_sizes:
             print(size)
@@ -3303,7 +3302,7 @@ def export(table_name):
     if scenario_name is False:
         csv_name = table_name + "_" + region_code +".csv"
     else:
-        csv_name = table_name + "_" + region_code + "_"+ scenario_name +".csv"
+        csv_name = table_name + "_" + region_code + "_" + scenario_name + ".csv"
     df.to_csv(output_folder+csv_name, index=False)
 
 
@@ -3421,30 +3420,30 @@ def generate_metrics(year, persons, households):
             })
         hh_over_time = pd.concat([hh_over_time, hh_over_time_new])
 
-    # students
-    if students.empty:
-        students = pd.DataFrame.from_dict({
-            "year": [str(year)],
-            "count":  [persons_df[
-                    persons_df["edu"].isin(
-                        [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
-                    )
-                ]["student"].sum()]
-            })
-    else:
-        new_students = pd.DataFrame.from_dict({
-            "year": [str(year)],
-            "count":  [persons_df[
-                    persons_df["edu"].isin(
-                        [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
-                    )
-                ]["student"].sum()]
-            })
-        students = pd.concat([students, new_students])
+    # # students
+    # if students.empty:
+    #     students = pd.DataFrame.from_dict({
+    #         "year": [str(year)],
+    #         "count":  [persons_df[
+    #                 persons_df["edu"].isin(
+    #                     [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    #                 )
+    #             ]["student"].sum()]
+    #         })
+    # else:
+    #     new_students = pd.DataFrame.from_dict({
+    #         "year": [str(year)],
+    #         "count":  [persons_df[
+    #                 persons_df["edu"].isin(
+    #                     [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    #                 )
+    #             ]["student"].sum()]
+    #         })
+    #     students = pd.concat([students, new_students])
 
     orca.add_table("age_dist_over_time", age_over_time)
     orca.add_table("pop_size_over_time", pop_over_time)
-    orca.add_table("student_counts", students)
+    # orca.add_table("student_counts", students)
     orca.add_table("hh_size_over_time", hh_over_time)
 
 
@@ -3668,11 +3667,11 @@ if orca.get_injectable("running_calibration_routine") == False:
             + household_stats
             # + ['household_transition']
             + household_stats
-            # + household_models
+            + household_models
             + household_stats
             + employment_models
             + household_stats
-            # + ["update_income"]
+            + ["update_income"]
             + end_of_year_models
             # + rem_variables
         )
@@ -3696,6 +3695,7 @@ if orca.get_injectable("running_calibration_routine") == False:
             + employment_models
             + end_of_year_models
         )
+    print("REGISTERING THE SIM STEPS!!")
     orca.add_injectable("sim_steps", steps_all_years)
     orca.add_injectable("pre_processing_steps", pre_processing_steps)
     orca.add_injectable("export_demo_stats", export_demo_steps)

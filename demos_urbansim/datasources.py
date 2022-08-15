@@ -77,18 +77,18 @@ if calibrated_folder == 'custom':
 orca.add_injectable('data_name', data_name)
 
 # Downloading the household totals, income rates, and move in rates
-hhsize_data_name = "data/%s/hsize_ct_%s.csv" % (region_code, region_code)
+hhsize_data_name = "data/hsize_ct_%s.csv" % region_code
 hhsize_data = pd.read_csv(hhsize_data_name)
 hhsize_data = hhsize_data.set_index("year")
 orca.add_table("hsize_ct", hhsize_data)
 
-income_rates_data_name = "data/%s/income_rates_%s.csv" % (region_code, region_code)
+income_rates_data_name = "data/income_rates_%s.csv" % region_code
 income_rates_data = pd.read_csv(income_rates_data_name,
                                 dtype={"lcm_county_id": object})
 orca.add_table("income_rates", income_rates_data)
 
 
-rel_map_data_name = "data/%s/relmap_%s.csv" % (region_code, region_code)
+rel_map_data_name = "data/relmap_%s.csv" % region_code
 rel_map_data = pd.read_csv(rel_map_data_name).set_index("index")
 orca.add_table("rel_map", rel_map_data)
 
@@ -102,7 +102,7 @@ if not all_local:
     else:
         print("Not downloading model_data.h5, since already exists")
 else:
-    if not os.path.exists("data/%s/%s" % (region_code, data_name)):
+    if not os.path.exists("data/%s" % data_name):
         raise OSError("No input data found at data/%s" % data_name)
 
 # -----------------------------------------------------------------------------------------
@@ -432,3 +432,25 @@ if not os.path.exists(output_folder):
 else:
     print("Output path exists!")
 orca.add_injectable("output_folder", output_folder)
+
+# ----------------------------------------------------------------------------------------
+# ADD NONURBANSIM TEMPLATE MODELS
+# -----------------------------------------------------------------------------------------
+def read_yaml(path):
+    """A function to read YAML file"""
+    with open(path) as f:
+        config = list(yaml.safe_load_all(f))[0]
+
+    return config
+region_code = orca.get_injectable("region_code")
+calibrated_folder = orca.get_injectable("calibrated_folder")
+skim_source = orca.get_injectable("skim_source")
+calibrated_path = os.path.join(
+    'calibrated_configs/', calibrated_folder, region_code)
+if os.path.exists(os.path.join('configs', calibrated_path, skim_source)):
+    calibrated_path = os.path.join(calibrated_path, skim_source)
+configs_folder = 'configs/' + calibrated_path if orca.get_injectable('calibrated') else 'estimated_configs'
+marriage_model = read_yaml(configs_folder + "/marriage.yml")
+orca.add_injectable("marriage_model", marriage_model)
+cohabitation_model = read_yaml(configs_folder + "/cohabitation.yaml")
+orca.add_injectable("cohabitation_model", cohabitation_model)
