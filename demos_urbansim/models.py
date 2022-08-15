@@ -46,10 +46,10 @@ def status_report(year):
                 print("         ", var, ": ", unplaced[var].unique())
     print("------------------------------------------------")
 
-@orca.step("print_columns")
-def print_columns(persons, households):
-    print(persons.local.columns)
-    print(households.local.columns)
+# @orca.step("print_columns")
+# def print_columns(persons, households):
+#     print(persons.local.columns)
+#     print(households.local.columns)
 
 @orca.step()
 def build_networks(blocks, block_groups, nodes, edges):
@@ -145,8 +145,8 @@ def household_stats(persons, households):
     """
     print("HH Size from Persons: ", persons["household_id"].unique().shape[0])
     print("HH Size from Household: ", households.index.unique().shape[0])
-    print("Counties: ", households["lcm_county_id"].unique())
-    print("Persons Size: ", persons.index.unique().shape[0])
+    # print("Counties: ", households["lcm_county_id"].unique())
+    # print("Persons Size: ", persons.index.unique().shape[0])
 
 
 @orca.step("fatality_model")
@@ -211,34 +211,34 @@ def update_income(persons, households, year):
     income_rates = orca.get_table("income_rates").to_frame()
     income_rates = income_rates[income_rates["year"] == year]
 
-    print("persons household unique:", persons_df["household_id"].unique().shape[0])
-    print("households id unique:", households_df.index.unique().shape[0])
-    print("households shape:", households_df.shape[0])
-    print("persons shape:", persons_df.shape[0])
+    # print("persons household unique:", persons_df["household_id"].unique().shape[0])
+    # print("households id unique:", households_df.index.unique().shape[0])
+    # print("households shape:", households_df.shape[0])
+    # print("persons shape:", persons_df.shape[0])
     # Merge persons with household counties and income rates
     persons_df = (
         persons_df.reset_index()
         .merge(hh_counties, on=["household_id"])
         .set_index("person_id")
     )
-    print("persons after merge with counties: ", persons_df.shape[0])
+    # print("persons after merge with counties: ", persons_df.shape[0])
     # breakpoint()
     persons_df = (
         persons_df.reset_index()
         .merge(income_rates, on=["lcm_county_id"])
         .set_index("person_id")
     )
-    print("persons county id:",persons_df["lcm_county_id"].unique())
-    print("income couties:",income_rates["lcm_county_id"].unique())
-    print("persons after merge with income and counties:", persons_df.shape[0])
+    # print("persons county id:",persons_df["lcm_county_id"].unique())
+    # print("income couties:",income_rates["lcm_county_id"].unique())
+    # print("persons after merge with income and counties:", persons_df.shape[0])
     # Update persons and household Incomes
     persons_df["earning"] = persons_df["earning"] * (1 + persons_df["rate"])
 
     new_incomes = persons_df.groupby("household_id").agg(income=("earning", "sum"))
-    print("Incomes:", new_incomes.shape[0])
-    print("households before update:", households_df.shape[0])
+    # print("Incomes:", new_incomes.shape[0])
+    # print("households before update:", households_df.shape[0])
     households_df.update(new_incomes)
-    print("Households after update:", households_df.shape[0])
+    # print("Households after update:", households_df.shape[0])
 
     orca.add_table("households", households_df[households_local_cols])
     orca.add_table("persons", persons_df[persons_local_cols])
@@ -272,7 +272,7 @@ def remove_dead_persons(persons, households, fatality_list, year):
         fatality_list (pd.Series): Pandas Series of fatality list
     """
     # pd.set_option('display.max_columns', None)
-    print("Starting to update demos")
+    # print("Starting to update demos")
     # Read tables and store as DataFrames
     houses = households.local.copy()
     households_columns = households.local_columns
@@ -283,8 +283,8 @@ def remove_dead_persons(persons, households, fatality_list, year):
 
     persons_df["dead"] = fatality_list
     graveyard = persons_df[persons_df["dead"] == 1].copy()
-    print(persons_df["household_id"].unique().shape[0])
-    print(houses.index.unique().shape[0])
+    # print(persons_df["household_id"].unique().shape[0])
+    # print(houses.index.unique().shape[0])
     #################################
     # HOUSEHOLD WHERE EVERYONE DIES #
     #################################
@@ -445,7 +445,7 @@ def remove_dead_persons(persons, households, fatality_list, year):
 
     houses.update(households_new)
 
-    print("Updating age stats table")
+    # print("Updating age stats table")
     # Get the age over time table populated
     age_over_time = orca.get_table("age_over_time").to_frame()
     if age_over_time.empty:
@@ -456,7 +456,7 @@ def remove_dead_persons(persons, households, fatality_list, year):
         )
     orca.add_table("age_over_time", age_over_time)
 
-    print("Update the population stats over time.")
+    # print("Update the population stats over time.")
     # Update the population over time stats
     graveyard_table = orca.get_table("pop_over_time").to_frame()
     if graveyard_table.empty:
@@ -465,7 +465,7 @@ def remove_dead_persons(persons, households, fatality_list, year):
     else:
         dead_people = pd.concat([graveyard_table, grave_persons])
 
-    print("Update the dead households and graveyard.")
+    # print("Update the dead households and graveyard.")
     # Load the dead households and graveyard table
     # Update persons table
     orca.add_table("persons", alive[persons_columns])
@@ -474,7 +474,7 @@ def remove_dead_persons(persons, households, fatality_list, year):
     orca.add_injectable(
         "max_p_id", orca.get_injectable("max_p_id"), alive["household_id"].max()
     )
-    print("DONE updating persons.")
+    # print("DONE updating persons.")
 
 
 def rez(group):
@@ -576,7 +576,7 @@ def update_age(persons, households):
     Returns:
         None
     """
-    print("Updating age of individuals...")
+    # print("Updating age of individuals...")
     persons_df = persons.local
     persons_df["age"] += 1
     households_df = households.to_frame(columns=["age_of_head", "hh_age_of_head"])
@@ -600,7 +600,7 @@ def update_age(persons, households):
         households_stats["seniors"] > 0, "yes", "no"
     )
     # Update age of household head in household table
-    print("Updating household and persons tables...")
+    # print("Updating household and persons tables...")
     orca.get_table("households").update_col("age_of_head", households_df["age_of_head"])
     orca.get_table("households").update_col(
         "hh_age_of_head", households_df["hh_age_of_head"]
@@ -690,7 +690,7 @@ def update_education_status(persons, student_list, year):
     orca.get_table("persons").update_col("student", persons_df["student"])
 
     # compute mean age of students
-    print("Updating students metrics...")
+    # print("Updating students metrics...")
     students = persons_df[persons_df["student"] == 1]
     edu_over_time = orca.get_table("edu_over_time").to_frame()
     student_population = orca.get_table("student_population").to_frame()
@@ -736,13 +736,13 @@ def education_model(persons, year):
     orca.add_table("persons", persons_df)
 
     # Run the education model
-    print("Running the deucation model...")
+    # print("Running the deucation model...")
     edu_model = mm.get_step("education")
     edu_model.run()
     student_list = edu_model.choices.astype(int)
 
     # Update student status
-    print("Updating student status...")
+    # print("Updating student status...")
     update_education_status(persons, student_list, year)
 
 
@@ -793,19 +793,19 @@ def birth_model(persons, households, year):
     orca.add_table("btable_elig", btable_elig_df)
 
     # Run model
-    print("Running the birth model...")
+    # print("Running the birth model...")
     birth = mm.get_step("birth")
     list_ids = str(eligible_hh_df.index.to_list())
-    print(len(eligible_hh_df.index.to_list()))
+    # print(len(eligible_hh_df.index.to_list()))
     birth.filters = "index in " + list_ids
     birth.out_filters = "index in " + list_ids
     birth.run()
     birth_list = birth.choices.astype(int)
     print(birth_list.sum(), " births")
-    print("Updating persons table with newborns...")
+    # print("Updating persons table with newborns...")
     update_birth(persons, households, birth_list)
 
-    print("Updating birth metrics...")
+    # print("Updating birth metrics...")
     btable_df = orca.get_table("btable").to_frame()
     if btable_df.empty:
         btable_df = pd.DataFrame.from_dict({
@@ -966,7 +966,7 @@ def update_households_after_kids(persons, households, kids_moving):
     Returns:
         None
     """
-    print("Updating households...")
+    # print("Updating households...")
     persons_df = orca.get_table("persons").local
 
     persons_local_cols = orca.get_table("persons").local_columns
@@ -1217,7 +1217,7 @@ def update_households_after_kids(persons, households, kids_moving):
         [households_df[households_local_cols], agg_households[households_local_cols]]
     )
     persons_df = pd.concat([persons_df[persons_local_cols], new_hh[persons_local_cols]])
-    print(households_df["hh_size"].unique())
+    # print(households_df["hh_size"].unique())
     # add to orca
     orca.add_table("households", households_df[households_local_cols])
     orca.add_table("persons", persons_df[persons_local_cols])
@@ -1234,7 +1234,7 @@ def update_households_after_kids(persons, households, kids_moving):
         metadata.loc["max_p_id", "value"] = persons_df.index.max()
     orca.add_table("metadata", metadata)
 
-    print("Updating kids moving metrics...")
+    # print("Updating kids moving metrics...")
     kids_moving_table = orca.get_table("kids_move_table").to_frame()
     if kids_moving_table.empty:
         kids_moving_table = pd.DataFrame(
@@ -1264,7 +1264,7 @@ def kids_moving_model(persons, households):
     persons_df["kid_moves"] = -99
     orca.add_table("persons", persons_df)
 
-    print("Running the kids moving model...")
+    # print("Running the kids moving model...")
     kids_moving_model = mm.get_step("kids_move")
     kids_moving_model.run()
     kids_moving = kids_moving_model.choices.astype(int)
@@ -1311,7 +1311,7 @@ def marriage_model(persons, households):
     data.drop(columns="cohab", inplace=True)
     data = data.loc[:, model_columns].copy()
     ###############################################################
-    print("Running marriage model...")
+    # print("Running marriage model...")
     marriage_list = simulation_mnl(data, marriage_coeffs)
     random_match = orca.get_injectable("random_match")
     if random_match==True:
@@ -1331,7 +1331,7 @@ def update_married_households_random(persons, households, marriage_list):
     Returns:
         None
     """
-    print("Updating persons and households...")
+    # print("Updating persons and households...")
     p_df = persons.local
     household_cols = households.local_columns
     household_df = households.local
@@ -1339,7 +1339,7 @@ def update_married_households_random(persons, households, marriage_list):
     persons_local_cols = persons.local_columns
     hh_df = households.to_frame(columns=["lcm_county_id"])
     hh_df.reset_index(inplace=True)
-    print("Indices duplicated:",p_df.index.duplicated().sum())
+    # print("Indices duplicated:",p_df.index.duplicated().sum())
     p_df["new_mar"] = marriage_list
     p_df["new_mar"].fillna(0, inplace=True)
     relevant = p_df[p_df["new_mar"] > 0].copy()
@@ -1402,11 +1402,11 @@ def update_married_households_random(persons, households, marriage_list):
     ].sample(min_cohab)
     
     
-    print("Printing family sizes:")
-    print(female_mar.shape[0])
-    print(male_mar.shape[0])
-    print(female_coh.shape[0])
-    print(male_coh.shape[0])
+    # print("Printing family sizes:")
+    # print(female_mar.shape[0])
+    # print(male_mar.shape[0])
+    # print(female_coh.shape[0])
+    # print(male_coh.shape[0])
     
     female_mar["number"] = np.arange(female_mar.shape[0])
     male_mar["number"] = np.arange(male_mar.shape[0])
@@ -1492,8 +1492,8 @@ def update_married_households_random(persons, households, marriage_list):
     ] = new_household_ids
 
     print('Finished Pairing')
-    print("Updating households and persons table")
-    print(final.household_id.unique().shape[0])
+    # print("Updating households and persons table")
+    # print(final.household_id.unique().shape[0])
     current_max_id = max(orca.get_injectable("max_hh_id"), household_df.index.max())
 
     final["hh_new_id"] = np.where(
@@ -1535,7 +1535,7 @@ def update_married_households_random(persons, households, marriage_list):
 
     household_df = household_df.loc[household_df.index.isin(p_df["household_id"])]
 
-    print("HH SHAPE 1:", p_df["household_id"].unique().shape[0])
+    # print("HH SHAPE 1:", p_df["household_id"].unique().shape[0])
 
     # leaf_hh = final.loc[final["stay"]==4, ["household_id", "partner_house"]]["household_id"].to_list()
     # root_hh = final.loc[final["stay"]==2, ["household_id", "partner_house"]]["household_id"].to_list()
@@ -1656,7 +1656,7 @@ def update_married_households_random(persons, households, marriage_list):
     final["MAR"] = np.where(final["new_mar"] == 1, 1, final["MAR"])
     p_df.update(final["MAR"])
 
-    print("HH SHAPE 2:", p_df["household_id"].unique().shape[0])
+    # print("HH SHAPE 2:", p_df["household_id"].unique().shape[0])
 
     new_hh = household_agg.loc[
         ~household_agg.index.isin(household_df.index.unique())
@@ -1700,7 +1700,7 @@ def update_married_households_random(persons, households, marriage_list):
         "max_hh_id", max(orca.get_injectable("max_hh_id"), household_df.index.max())
     )
 
-    print("households size", household_df.shape[0])
+    # print("households size", household_df.shape[0])
     
     metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
@@ -1740,7 +1740,7 @@ def update_married_households(persons, households, marriage_list):
     Returns:
         None
     """
-    print("Updating persons and households...")
+    # print("Updating persons and households...")
     p_df = persons.local
     household_cols = households.local_columns
     household_df = households.local
@@ -1923,8 +1923,8 @@ def update_married_households(persons, households, marriage_list):
     ] = new_household_ids
 
     print("Finished Pairing")
-    print("Updating households and persons table")
-    print(final.household_id.unique().shape[0])
+    # print("Updating households and persons table")
+    # print(final.household_id.unique().shape[0])
     current_max_id = max(orca.get_injectable("max_hh_id"), household_df.index.max())
 
     final["hh_new_id"] = np.where(
@@ -1966,7 +1966,7 @@ def update_married_households(persons, households, marriage_list):
 
     household_df = household_df.loc[household_df.index.isin(p_df["household_id"])]
 
-    print("HH SHAPE 1:", p_df["household_id"].unique().shape[0])
+    # print("HH SHAPE 1:", p_df["household_id"].unique().shape[0])
 
     # leaf_hh = final.loc[final["stay"]==4, ["household_id", "partner_house"]]["household_id"].to_list()
     # root_hh = final.loc[final["stay"]==2, ["household_id", "partner_house"]]["household_id"].to_list()
@@ -2087,7 +2087,7 @@ def update_married_households(persons, households, marriage_list):
     final["MAR"] = np.where(final["new_mar"] == 1, 1, final["MAR"])
     p_df.update(final["MAR"])
 
-    print("HH SHAPE 2:", p_df["household_id"].unique().shape[0])
+    # print("HH SHAPE 2:", p_df["household_id"].unique().shape[0])
 
     new_hh = household_agg.loc[
         ~household_agg.index.isin(household_df.index.unique())
@@ -2131,7 +2131,7 @@ def update_married_households(persons, households, marriage_list):
         "max_hh_id", max(orca.get_injectable("max_hh_id"), household_df.index.max())
     )
 
-    print("households size", household_df.shape[0])
+    # print("households size", household_df.shape[0])
 
     metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
@@ -2171,7 +2171,7 @@ def update_cohabitating_households(persons, households, cohabitate_list):
     Returns:
         None
     """
-    print("Updating persons and households...")
+    # print("Updating persons and households...")
     persons_df = persons.local
     persons_local_cols = persons.local_columns
     households_df = households.local
@@ -2445,7 +2445,7 @@ def update_divorce(persons, households, divorce_list):
     Returns:
         None
     """
-    print("Updating household stats...")
+    # print("Updating household stats...")
     households_local_cols = households.local_columns
 
     persons_local_cols = persons.local_columns
@@ -2962,32 +2962,32 @@ def full_transition(
         ct["lcm_county_id"] = "0" + ct["lcm_county_id"].astype(str)
         max_hh_id = agnt.index.max()
         for size in hh_sizes:
-            print(size)
+            # print(size)
             agnt_sub = agnt[agnt["hh_size"] == size].copy()
-            print(agnt_sub.shape[0])
+            # print(agnt_sub.shape[0])
             ct_sub = ct[ct["hh_size"] == size].copy()
-            print(ct_sub.shape[0])
+            # print(ct_sub.shape[0])
             tran = transition.TabularTotalsTransition(ct_sub, totals_column, accounting_column)
-            print(ct_sub.dtypes)
+            # print(ct_sub.dtypes)
             updated_sub, added_sub, copied_sub, removed_sub = tran.transition(agnt_sub, year)
-            print("Edits shape:")
-            print("==================")
-            print(updated_sub.shape)
-            print(added_sub.shape)
-            print(copied_sub.shape)
-            print(removed_sub.shape)
-            print("==================")
+            # print("Edits shape:")
+            # print("==================")
+            # print(updated_sub.shape)
+            # print(added_sub.shape)
+            # print(copied_sub.shape)
+            # print(removed_sub.shape)
+            # print("==================")
             # max_hh_id = max(agnt.index.max(), updated_sub.index.max())
             if updated.empty:
                 updated = updated_sub.copy()
-                print("updated_sub index:", updated_sub.index.name)
-                print("updated_sub has duplicates:", updated.index.has_duplicates)
+                # print("updated_sub index:", updated_sub.index.name)
+                # print("updated_sub has duplicates:", updated.index.has_duplicates)
             else:
-                print("updated_sub index: ", updated_sub.index.name)
-                print("updated before index:", updated.index.name)
+                # print("updated_sub index: ", updated_sub.index.name)
+                # print("updated before index:", updated.index.name)
                 updated = pd.concat([updated, updated_sub])
-                print("updated after index:", updated.index.name)
-                print("Updated Shape after concat:", updated.shape)
+                # print("updated after index:", updated.index.name)
+                # print("Updated Shape after concat:", updated.shape)
 
             if added.empty:
                 added = added_sub.copy()
@@ -3013,10 +3013,10 @@ def full_transition(
     else:
         tran = transition.TabularTotalsTransition(ct, totals_column, accounting_column)
         updated, added, copied, removed = tran.transition(agnt, year)
-        print(type(updated))
-        print(type(added))
-        print(type(copied))
-        print(type(removed))
+        # print(type(updated))
+        # print(type(added))
+        # print(type(copied))
+        # print(type(removed))
 
     if (len(added) > 0) & (agents.name == "households"):
         metadata = orca.get_table("metadata").to_frame()
@@ -3029,11 +3029,11 @@ def full_transition(
             new_max = max(agnt.index.max(), updated.index.max())
             new_added = np.arange(len(added)) + max_hh_id + 1
             updated["new_idx"] = None
-            print(len(added))
-            print(len(new_added))
-            print(len(copied))
-            print(updated.shape)
-            print(new_agnts.shape)
+            # print(len(added))
+            # print(len(new_added))
+            # print(len(copied))
+            # print(updated.shape)
+            # print(new_agnts.shape)
             # breakpoint()
 
             persons = orca.get_table("persons").local
@@ -3068,7 +3068,7 @@ def full_transition(
             updated["new_idx"] = updated.index.values
             # updated.loc[not_added, 'new_idx'] = updated.loc[not_added].index.values
             updated = pd.concat([updated, new_agnts])
-            print(updated.shape[0])
+            # print(updated.shape[0])
             updated.set_index("new_idx", inplace=True, drop=True)
             updated.index.name = idx_name
             added = new_added
@@ -3076,10 +3076,10 @@ def full_transition(
             persons_local_columns = orca.get_table("persons").local_columns
             orca.add_table("persons", persons[persons_local_columns])
     # breakpoint()        
-    print("Updated shape:", updated.shape[0])
-    print("Added shape:", added.shape[0])
-    print("Removed shape:", removed.shape[0])
-    print("Copied shape:", copied.shape[0])
+    # print("Updated shape:", updated.shape[0])
+    # print("Added shape:", added.shape[0])
+    # print("Removed shape:", removed.shape[0])
+    # print("Copied shape:", copied.shape[0])
     updated.loc[added, location_fname] = "-1"
 
     if set_year_built:
@@ -3695,7 +3695,6 @@ if orca.get_injectable("running_calibration_routine") == False:
             + employment_models
             + end_of_year_models
         )
-    print("REGISTERING THE SIM STEPS!!")
     orca.add_injectable("sim_steps", steps_all_years)
     orca.add_injectable("pre_processing_steps", pre_processing_steps)
     orca.add_injectable("export_demo_stats", export_demo_steps)
