@@ -74,18 +74,27 @@ orca.add_injectable("region_type", region_type)
 data_name = '%s_%s_model_data.h5' % (region_type, region_code)
 if calibrated_folder == 'custom':
     data_name = 'custom_%s' % (data_name)
+# data_name = 'model_data_2017.h5'
+
 orca.add_injectable('data_name', data_name)
+print(data_name)
 
 # Downloading the household totals, income rates, and move in rates
 hhsize_data_name = "data/hsize_ct_%s.csv" % region_code
-hhsize_data = pd.read_csv(hhsize_data_name)
+hhsize_data = pd.read_csv(hhsize_data_name,
+                          dtype={"lcm_county_id": object,
+                                 "year": int,
+                                 "hh_size": object,
+                                 "total_number_of_households": int})
 hhsize_data = hhsize_data.set_index("year")
 orca.add_table("hsize_ct", hhsize_data)
 
-income_rates_data_name = "data/income_rates_%s.csv" % region_code
-income_rates_data = pd.read_csv(income_rates_data_name,
-                                dtype={"lcm_county_id": object})
-orca.add_table("income_rates", income_rates_data)
+# income_rates_data_name = "data/income_rates_%s.csv" % region_code
+# income_rates_data = pd.read_csv(income_rates_data_name,
+#                                 dtype={"lcm_county_id": object,
+#                                        "year": int,
+#                                        "rate": float})
+# orca.add_table("income_rates", income_rates_data)
 
 
 rel_map_data_name = "data/relmap_%s.csv" % region_code
