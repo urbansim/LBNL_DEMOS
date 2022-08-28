@@ -1706,10 +1706,9 @@ def register_skim_var(table_name, column_name, threshold, var, impedance_column,
         zones_table = orca.get_table(table_name).to_frame(var)
         zones_table.index.names = ['zone_id']
         zones_table = zones_table.reset_index()
-        # travel_data["to_zone_id"] = travel_data["to_zone_id"].astype(int) ## Austin vs Bay Area specific, data types need fixing
-        print(travel_data.head())
-        print(zones_table.dtypes)
-        # travel_data["to_zone_id"] = travel_data["to_zone_id"].astype(int)
+        # # travel_data["to_zone_id"] = travel_data["to_zone_id"].astype(int) ## Austin vs Bay Area specific, data types need fixing
+        # print(travel_data.dtypes)
+        # print(zones_table.dtypes)
         travel_data = travel_data.reset_index().merge(zones_table, how='left', left_on='to_zone_id', right_on='zone_id')
         travel_data = travel_data.set_index(['from_zone_id'])
         travel_data[var] = travel_data[var].fillna(0)

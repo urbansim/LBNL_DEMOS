@@ -744,7 +744,99 @@ def education_model(persons, year):
     # Update student status
     # print("Updating student status...")
     update_education_status(persons, student_list, year)
+    
 
+# @orca.step("laborforce_model")
+# def laborforce_model(persons, year):
+#     """
+#     Run the education model and update the persons table
+
+#     Args:
+#         persons (DataFrameWrapper): DataFrameWrapper of the persons table
+
+#     Returns:
+#         None
+#     """
+#     # Add temporary variable
+#     persons_df = persons.local
+
+#     # Run the education model
+#     # print("Running the deucation model...")
+#     in_workforce_model = mm.get_step("entering_workforce")
+#     in_workforce_model.run()
+#     in_workforce_persons = in_workforce_model.choices.astype(int)
+#     out_workforce_model = mm.get_step("leaving_workforce")
+#     out_workforce_model.run()
+#     out_workforce_persons = in_workforce_model.choices.astype(int)
+#     # Update student status
+#     # print("Updating student status...")
+#     update_education_status(persons,
+#                             in_workforce_persons,
+#                             out_workforce_persons,
+#                             year)
+
+
+# def update_education_status(persons, in_workforce_persons, out_workforce_persons, year):
+#     """
+#     Function to update the worker status in persons table based
+#     on the labor participation model
+
+#     Args:
+#         persons (DataFrameWrapper): DataFrameWrapper of the persons table
+#         student_list (pd.Series): Pandas Series containing the output of
+#         the education model
+
+#     Returns:
+#         None
+#     """
+#     # Pull Data
+#     persons_df = persons.to_frame(
+#         columns=["household_id", "worker"]
+#     )
+#     persons_df["exit_workforce"] = out_workforce_persons
+#     # persons_df["exit_workforce"].fillna(2, inplace=True)
+
+#     persons_df["enter_workforce"] = in_workforce_persons
+#     # persons_df["enter_workforce"].fillna(2, inplace=True)
+
+#     # Update education levels
+#     persons_df["worker"] = np.where(persons_df["exit_workforce"]==1, 0, persons_df["worker"])
+#     persons_df["worker"] = np.where(persons_df["enter_workforce"]==1, 1, persons_df["worker"])
+
+#     # TODO: Similarly, do something for work from home
+
+#     orca.get_table("persons").update_col("worker", persons_df["worker"])
+
+#     # compute mean age of students
+#     # print("Updating students metrics...")
+    
+#     agg_households = persons_df.groupby("household_id").agg(
+#         sum_workers = ("workers", "sum")
+#     )
+    
+#     agg_households["hh_workers"] = np.where(
+#         agg_households["workers"] == 0,
+#         "none",
+#         np.where(agg_households["workers"] == 1, "one", "two or more"))
+    
+#     # TODO: Make sure that the actual workers don't get restorted due to difference in indexing
+#     # TODO: Make sure there is a better way to do this
+#     orca.get_table("households").update_col("workers", agg_households["workers"])
+#     orca.get_table("households").update_col("hh_workers", agg_households["hh_workers"])
+
+#     workers = persons_df[persons_df["student"] == 1]
+#     workers_over_time = orca.get_table("workers_over_time").to_frame()
+#     workers_population = orca.get_table("workers_population").to_frame()
+#     if workers_population.empty:
+#         workers_population = pd.DataFrame(
+#             data={"year": [year], "count": [workers.shape[0]]}
+#         )
+#     else:
+#         workers_population_new = pd.DataFrame(
+#             data={"year": [year], "count": [workers.shape[0]]}
+#         )
+#         workers_population = pd.concat([workers_population, workers_population_new])
+#     orca.add_table("workers_population", workers_population)
 
 
 @orca.step("birth_model")
@@ -1297,9 +1389,7 @@ def marriage_model(persons, households):
     COHABS_PERSONS = persons_df["relate"] == 13
     cohab_persons_df = persons_df.loc[COHABS_PERSONS].copy()
     COHABS_HOUSEHOLDS = cohab_persons_df["household_id"].unique()
-    COHABS_HEADS = (persons_df["household_id"].isin(COHABS_HOUSEHOLDS)) & (
-        persons_df["relate"] == 0
-    )
+    COHABS_HEADS = (persons_df["household_id"].isin(COHABS_HOUSEHOLDS)) & (persons_df["relate"] == 0)
     cohab_heads_df = persons_df.loc[COHABS_HEADS].copy()
     all_cohabs_df = pd.concat([cohab_heads_df, cohab_persons_df])
     all_cohabs_df["cohab"] = 1
@@ -1345,6 +1435,7 @@ def update_married_households_random(persons, households, marriage_list):
     relevant = p_df[p_df["new_mar"] > 0].copy()
     print("New marriages:", (relevant["new_mar"] ==1).sum())
     print("New cohabs:", (relevant["new_mar"] ==2).sum())
+    # breakpoint()
     # Ensure an even number of people get married
     if relevant[relevant["new_mar"]==1].shape[0] % 2 != 0:
         sampled = p_df[p_df["new_mar"]==1].sample(1)
@@ -2959,7 +3050,7 @@ def full_transition(
         copied = pd.Index([])
         removed = pd.Index([])
         ct["lcm_county_id"] = ct["lcm_county_id"].astype(str)
-        ct["lcm_county_id"] = "0" + ct["lcm_county_id"].astype(str)
+        # ct["lcm_county_id"] = "0" + ct["lcm_county_id"].astype(str)
         max_hh_id = agnt.index.max()
         for size in hh_sizes:
             # print(size)
@@ -3627,7 +3718,7 @@ if orca.get_injectable("running_calibration_routine") == False:
         # end_of_year_models =['generate_outputs']
         # demos_models =
         demo_models = [
-            "print_columns",
+            # "print_columns",
             "update_age",
             "household_stats",
             "marriage_model",
@@ -3671,7 +3762,7 @@ if orca.get_injectable("running_calibration_routine") == False:
             + household_stats
             + employment_models
             + household_stats
-            + ["update_income"]
+            # + ["update_income"]
             + end_of_year_models
             # + rem_variables
         )
