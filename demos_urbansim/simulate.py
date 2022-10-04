@@ -52,7 +52,7 @@ def run(
     if table_save:
         out_tables = datasources.hdf_tables + ["graveyard"]
     else:
-        out_tables = datasources.hdf_tables
+        out_tables = datasources.hdf_tables + ["graveyard"] #TODO: FIX THIS
     iter_vars = list(range(
         base_year + freq_interval, forecast_year + freq_interval, freq_interval))
     orca.run(
@@ -130,5 +130,4 @@ if __name__ == '__main__':
     # breakpoint()
     # uid = pwd.getpwnam(usernmae).pw_uid    
     # gid = grp.getgrnam(groupname).gr_gid
-    # os.chown(out_folder, uid, gid)
-    os.chown(output_fname, "ubuntu", "ubuntu")
+    os.chown(output_fname, uid, gid)
