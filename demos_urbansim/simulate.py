@@ -3,6 +3,8 @@ import argparse
 import numpy as np
 import pandas as pd
 import os
+import pwd
+import grp
 from urbansim_templates import modelmanager as mm
 from urbansim_templates.models import LargeMultinomialLogitStep
 from urbansim_templates.models import OLSRegressionStep
@@ -50,7 +52,7 @@ def run(
     if table_save:
         out_tables = datasources.hdf_tables + ["graveyard"]
     else:
-        out_tables = datasources.hdf_tables
+        out_tables = datasources.hdf_tables + ["graveyard"] #TODO: FIX THIS
     iter_vars = list(range(
         base_year + freq_interval, forecast_year + freq_interval, freq_interval))
     orca.run(
@@ -125,4 +127,7 @@ if __name__ == '__main__':
     data_stats = os.stat('data/{0}'.format(input_data_name))
     uid = data_stats.st_uid
     gid = data_stats.st_gid
+    # breakpoint()
+    # uid = pwd.getpwnam(usernmae).pw_uid    
+    # gid = grp.getgrnam(groupname).gr_gid
     os.chown(output_fname, uid, gid)

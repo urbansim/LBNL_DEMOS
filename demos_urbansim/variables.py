@@ -1741,6 +1741,7 @@ def register_disag_var(table_from, table_to, column_name, prefix=True):
     @orca.column(table_to, disag_col_name, cache=True, cache_scope='iteration')
     def column_func():
         print(column_name)
+        print(table_from)
         from_df = orca.get_table(table_from).to_frame(column_name)
         from_idx = from_df.index.name
         to_df = orca.get_table(table_to).to_frame(from_idx)

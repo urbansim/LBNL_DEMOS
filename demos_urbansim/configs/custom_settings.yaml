@@ -1,7 +1,7 @@
 "06197001":
   skims:
     beam: {columns: ['SOV_AM_IVT_mins'],
-        impedance_names: {'SOV_AM_IVT_mins': 'sov_c'},
+        impedance_names: {'SOV_AM_IVT_mins': 'sov'},
         impedance_units: 'min',
         impedance_thresholds: [5, 10, 15, 20, 25, 30],
         zones_table: 'zones'}
