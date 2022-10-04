@@ -29,6 +29,7 @@ def run(
     orca.add_injectable('table_save', table_save)
     orca.add_injectable('skim_source', skim_source)
     orca.add_injectable('random_match', random_match)
+    orca.add_injectable('scenario_name', False)
 
     import datasources
     import variables
