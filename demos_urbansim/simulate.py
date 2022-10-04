@@ -111,8 +111,10 @@ if __name__ == '__main__':
     random_match = args.random_matching if args.random_matching else False
     skim_source = args.travel_model if args.travel_model else 'beam'
     scenario_name = args.scenario_name if args.scenario_name else False
-    output_fname = "data/model_data_"+ str(region_code) + "_" + str(scenario_name)+"_"+"{0}.h5".format(forecast_year) if args.scenario_name \
-        else "data/model_data_"+str(region_code)+"_"+"{0}.h5".format(forecast_year)
+    output_fname = args.output_fname if args.output_fname \
+        else "data/model_data_{0}.h5".format(forecast_year)
+    # output_fname = "data/model_data_"+ str(region_code) + "_" + str(scenario_name)+"_"+"{0}.h5".format(forecast_year) if args.scenario_name \
+    #     else "data/model_data_"+str(region_code)+"_"+"{0}.h5".format(forecast_year)
     print("OUTPUT FILENAME IS:",output_fname)
 
     run(
@@ -128,6 +130,6 @@ if __name__ == '__main__':
     uid = data_stats.st_uid
     gid = data_stats.st_gid
     # breakpoint()
-    # uid = pwd.getpwnam(usernmae).pw_uid    
+    # uid = pwd.getpwnam(usernmae).pw_uid    co
     # gid = grp.getgrnam(groupname).gr_gid
     os.chown(output_fname, uid, gid)
