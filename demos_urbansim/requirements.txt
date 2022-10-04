@@ -16,6 +16,5 @@ google-cloud-storage
 plotly
 stopwatch.py
 
-http://23e1d66788b6977dd240a5c776531e5f09a8f410:x-oauth-basic@github.com/urbansim/urbansim_hooks/archive/master.zip#egg=urbansim_hooks
 git+https://git@github.com/UDST/choicemodels.git@lotto_choice_empty_alts
 git+https://git@github.com/UDST/urbansim_templates.git@dev
