@@ -13,7 +13,7 @@ from urbansim_templates.models import OLSRegressionStep
 def run(
         region_code, initial_run, base_year, forecast_year, random_seed,
         calibrated, calibrated_folder, multi_level, segmented, capacity_boost,
-        all_local, freq_interval, output_fname, skim_source, random_match, table_save, scenario_name):
+        all_local, freq_interval, output_fname, skim_source, random_match, table_save):
     orca.add_injectable('running_calibration_routine', False)
     orca.add_injectable('local_simulation', True)
     orca.add_injectable('initial_run', initial_run)
@@ -29,7 +29,6 @@ def run(
     orca.add_injectable('table_save', table_save)
     orca.add_injectable('skim_source', skim_source)
     orca.add_injectable('random_match', random_match)
-    orca.add_injectable('scenario_name', scenario_name)
 
     import datasources
     import variables
@@ -91,7 +90,6 @@ if __name__ == '__main__':
     parser.add_argument("-t", "--travel_model", type=str, help="source of skims data. e.g. beam, polaris")
     parser.add_argument("-ts", "--table_save", action="store_true", help="store all other generated tables")
     parser.add_argument("-rm", "--random_matching", action="store_true", help="random matching in marriage")
-    parser.add_argument("-sn", "--scenario_name", type=str, help="name of scenario of simulation")
 
     args = parser.parse_args()
     region_code = args.region_code
