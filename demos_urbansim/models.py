@@ -2,6 +2,7 @@ import math
 from operator import index
 import os
 from typing import Sized
+import time
 
 import numpy as np
 import orca
@@ -2547,8 +2548,12 @@ def update_divorce(persons, households, divorce_list):
 
     households_df["divorced"] = divorce_list
 
+    t0 = time.time()
     divorce_households = households_df[households_df["divorced"] == 1].copy()
-
+    t1 = time.time()
+    total = t1 - t0
+    print("Copy divroce households:", total)
+    t0 = time.time()
     persons_divorce = persons_df[
         persons_df["household_id"].isin(divorce_households.index)
     ].copy()
@@ -2562,7 +2567,10 @@ def update_divorce(persons, households, divorce_list):
     staying_house = persons_divorce[
         ~persons_divorce.index.isin(leaving_house.index)
     ].copy()
-
+    t1 = time.time()
+    total = t1 - t0
+    print("Household segmentation:", total)
+    t0 = time.time()
     # give the people leaving a new household id, update their marriage status, and other variables
     leaving_house["relate"] = 0
     leaving_house["MAR"] = 3
@@ -2570,7 +2578,10 @@ def update_divorce(persons, households, divorce_list):
     leaving_house["household_id"] = (
         np.arange(leaving_house.shape[0]) + households_df.index.max() + 1
     )
-
+    t1 = time.time()
+    total = t1 - t0
+    print("Leaving households variables", total)
+    t0 = time.time()
     # modify necessary variables for members staying in household
     staying_house["relate"] = np.where(
         staying_house["relate"].isin([1, 0]), 0, staying_house["relate"]
@@ -2617,7 +2628,12 @@ def update_divorce(persons, households, divorce_list):
         children=("child", "sum"),
         persons=("person", "sum"),
     )
-
+    
+    t1 = time.time()
+    total = t1-t0
+    print("Staying Household aggregation:", total)
+    t0 = time.time()
+    
     # household_agg["lcm_county_id"] = household_agg["lcm_county_id"]
     staying_household_agg["gt55"] = np.where(
         staying_household_agg["persons_age_gt55"] > 0, 1, 0
@@ -2679,7 +2695,9 @@ def update_divorce(persons, households, divorce_list):
             ),
         ),
     )
-
+    t1 = time.time()
+    total = t1-t0
+    print("Staying Household variables:", total)
     # staying_household_agg["hh_type"] = 1
     # staying_household_agg["household_type"] = 1
     # staying_household_agg["serialno"] = -1
@@ -2690,6 +2708,7 @@ def update_divorce(persons, households, divorce_list):
 
     # initiate new households with individuals leaving house
     # TODO: DISCUSS ALL THESE INITIALIZATION MEASURES
+    t0 = time.time()
     new_households = leaving_house.copy()
     new_households["person"] = 1
     new_households["is_head"] = np.where(new_households["relate"] == 0, 1, 0)
@@ -2703,8 +2722,12 @@ def update_divorce(persons, households, divorce_list):
     )
     new_households["senior"] = np.where(new_households["age"] >= 65, 1, 0)
     new_households["age_gt55"] = np.where(new_households["age"] >= 55, 1, 0)
+    t1 = time.time()
+    total = t1-t0
+    print("create newhouseholds:", total)
 
     new_households = new_households.sort_values(by=["household_id", "relate"])
+    t0 = time.time()
     household_agg = new_households.groupby("household_id").agg(
         income=("earning", "sum"),
         race_of_head=("race_head", "sum"),
@@ -2717,7 +2740,11 @@ def update_divorce(persons, households, divorce_list):
         children=("child", "sum"),
         persons=("person", "sum"),
     )
+    t1 = time.time()
+    total = t1-t0
+    print("Household aggregation:", total)
 
+    t0 = time.time()
     # household_agg["lcm_county_id"] = household_agg["lcm_county_id"]
     household_agg["gt55"] = np.where(household_agg["persons_age_gt55"] > 0, 1, 0)
     household_agg["gt2"] = np.where(household_agg["persons"] > 2, 1, 0)
@@ -2793,16 +2820,24 @@ def update_divorce(persons, households, divorce_list):
     # household_agg.set_index(household_agg["household_id"], inplace=True)
     # household_agg.index.name = "household_id"
 
+    t1 = time.time()
+    total = t1-t0
+    print("Household aggregation variables:", total)
+    
     households_df.update(staying_household_agg)
 
+    t0 = time.time()
     # merge all in one persons and households table
     new_households = pd.concat(
         [households_df[households_local_cols], household_agg[households_local_cols]]
     )
     persons_df.update(staying_house[persons_local_cols])
     persons_df.update(leaving_house[persons_local_cols])
-
+    t1 = time.time()
+    total = t1-t0
+    print("Updating dataframes:", total)
     # add to orca
+    t0 = time.time()
     orca.add_table("households", new_households[households_local_cols])
     orca.add_table("persons", persons_df[persons_local_cols])
     orca.add_injectable(
@@ -2827,6 +2862,9 @@ def update_divorce(persons, households, divorce_list):
             {"divorced": divorce_list.sum()}, ignore_index=True
         )
     orca.add_table("divorce_table", divorce_table)
+    t1 = time.time()
+    total = t1-t0
+    print("Adding to orca:", total)
 
 
 @orca.step("household_divorce")
@@ -2841,10 +2879,15 @@ def household_divorce(persons, households):
     Returns:
         None
     """
+    t0 = time.time()
     households_df = orca.get_table("households").local
     households_df["divorced"] = -99
     orca.add_table("households", households_df)
     persons_df = orca.get_table("persons").local
+    t1 = time.time()
+    total = t1-t0
+    print("Pulling data:", total)
+    t0 = time.time()
     ELIGIBLE_HOUSEHOLDS = list(
         persons_df[(persons_df["relate"].isin([0, 1])) & (persons_df["MAR"] == 1)][
             "household_id"
@@ -2861,15 +2904,27 @@ def household_divorce(persons, households):
         .size()
     )
     ELIGIBLE_HOUSEHOLDS = sizes[(sizes == 2)].index.to_list()
-
+    t1 = time.time()
+    total = t1-t0
+    print("Eligibility time:", total)
     print("eligible households are", len(ELIGIBLE_HOUSEHOLDS))
+    t0 = time.time()
     divorce_model = mm.get_step("divorce")
+    t1 = time.time()
+    total = t1-t0
+    print("retrieving model:", total)
     list_ids = str(ELIGIBLE_HOUSEHOLDS)
     divorce_model.filters = "index in " + list_ids
     divorce_model.out_filters = "index in " + list_ids
     divorce_model.run()
+    t1 = time.time()
+    total = t1-t0
+    print("Running model:", total)
+    t0 = time.time()
     divorce_list = divorce_model.choices.astype(int)
-
+    t1 = time.time()
+    total = t1-t0
+    print("Converting to int:", total)
     update_divorce(persons, households, divorce_list)
 
 
@@ -3722,7 +3777,7 @@ if orca.get_injectable("running_calibration_routine") == False:
             "update_age",
             "household_stats",
             "marriage_model",
-            "household_stats",
+            # "household_stats",
             "household_divorce",
             "household_stats",
             "cohabitation_model",
@@ -3756,13 +3811,13 @@ if orca.get_injectable("running_calibration_routine") == False:
             + household_stats
             + developer_models
             + household_stats
-            # + ['household_transition']
+            + ['household_transition']
             + household_stats
             + household_models
             + household_stats
             + employment_models
             + household_stats
-            # + ["update_income"]
+            + ["update_income"]
             + end_of_year_models
             # + rem_variables
         )

@@ -3,6 +3,8 @@ import argparse
 import numpy as np
 import pandas as pd
 import os
+import pwd
+import grp
 from urbansim_templates import modelmanager as mm
 from urbansim_templates.models import LargeMultinomialLogitStep
 from urbansim_templates.models import OLSRegressionStep
@@ -125,4 +127,8 @@ if __name__ == '__main__':
     data_stats = os.stat('data/{0}'.format(input_data_name))
     uid = data_stats.st_uid
     gid = data_stats.st_gid
-    os.chown(output_fname, uid, gid)
+    # breakpoint()
+    # uid = pwd.getpwnam(usernmae).pw_uid    
+    # gid = grp.getgrnam(groupname).gr_gid
+    # os.chown(out_folder, uid, gid)
+    os.chown(output_fname, "ubuntu", "ubuntu")

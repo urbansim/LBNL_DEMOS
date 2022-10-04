@@ -89,12 +89,12 @@ hhsize_data = pd.read_csv(hhsize_data_name,
 hhsize_data = hhsize_data.set_index("year")
 orca.add_table("hsize_ct", hhsize_data)
 
-# income_rates_data_name = "data/income_rates_%s.csv" % region_code
-# income_rates_data = pd.read_csv(income_rates_data_name,
-#                                 dtype={"lcm_county_id": object,
-#                                        "year": int,
-#                                        "rate": float})
-# orca.add_table("income_rates", income_rates_data)
+income_rates_data_name = "data/income_rates_%s.csv" % region_code
+income_rates_data = pd.read_csv(income_rates_data_name,
+                                dtype={"lcm_county_id": object,
+                                       "year": int,
+                                       "rate": float})
+orca.add_table("income_rates", income_rates_data)
 
 
 rel_map_data_name = "data/relmap_%s.csv" % region_code
