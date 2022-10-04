@@ -126,6 +126,6 @@ if __name__ == '__main__':
     uid = data_stats.st_uid
     gid = data_stats.st_gid
     # breakpoint()
-    # uid = pwd.getpwnam(usernmae).pw_uid    co
+    # uid = pwd.getpwnam(usernmae).pw_uid
     # gid = grp.getgrnam(groupname).gr_gid
     os.chown(output_fname, uid, gid)
