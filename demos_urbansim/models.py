@@ -144,10 +144,13 @@ def household_stats(persons, households):
         persons (DataFrame): Pandas DataFrame of the persons table
         households (DataFrame): Pandas DataFrame of the households table
     """
-    print("HH Size from Persons: ", persons["household_id"].unique().shape[0])
-    print("HH Size from Household: ", households.index.unique().shape[0])
+    print("HH Size from Persons: ", orca.get_table("persons").local["household_id"].unique().shape[0])
+    print("HH Size from Household: ", orca.get_table("households").local.index.unique().shape[0])
+    print("HH duplicates: ", orca.get_table("households").local.index.has_duplicates)
     # print("Counties: ", households["lcm_county_id"].unique())
-    # print("Persons Size: ", persons.index.unique().shape[0])
+    print("Persons Size: ", orca.get_table("persons").local.index.unique().shape[0])
+    print("Persons Duplicated: ", orca.get_table("persons").local.index.has_duplicates)
+
 
 
 @orca.step("fatality_model")
@@ -231,17 +234,17 @@ def update_income(persons, households, year):
         year (int): simulation year
     """
     # Pulling data, income rates, and county IDs
-    persons_df = persons.local
-    households_df = households.local
+    persons_df = orca.get_table("persons").local
+    households_df = orca.get_table("households").local
     
     # print("Is hh_id duplicated:",households_df.index.has_duplicates)
     # print("Number of hh from hh:",np.unique(households_df.index).shape)
     # print("Number of hh from persons:", persons_df["household_id"].unique().shape)
 
-    households_local_cols = households.local_columns
-    persons_local_cols = persons.local_columns
-
-    hh_counties = households.to_frame(columns=["lcm_county_id"]).reset_index()
+    households_local_cols = households_df.columns
+    persons_local_cols = persons_df.columns
+    # breakpoint()
+    hh_counties = households_df["lcm_county_id"].copy()
 
     income_rates = orca.get_table("income_rates").to_frame()
     income_rates = income_rates[income_rates["year"] == year]
@@ -251,19 +254,11 @@ def update_income(persons, households, year):
     # print("households shape:", households_df.shape[0])
     # print("persons shape:", persons_df.shape[0])
     # Merge persons with household counties and income rates
-    persons_df = (
-        persons_df.reset_index()
-        .merge(hh_counties, on=["household_id"])
-        .set_index("person_id")
-    )
+    persons_df = (persons_df.reset_index().merge(hh_counties.reset_index(), on=["household_id"]).set_index("person_id"))
     # print("persons after merge with counties: ", persons_df.shape[0])
     # breakpoint()
-    persons_df = (
-        persons_df.reset_index()
-        .merge(income_rates, on=["lcm_county_id"])
-        .set_index("person_id")
-    )
-    print("HH_ID - HH_P_ID:",len(set(hh_counties["household_id"].unique())-set(persons_df["household_id"].unique())))
+    persons_df = (persons_df.reset_index().merge(income_rates, on=["lcm_county_id"]).set_index("person_id"))
+    print("HH_ID - HH_P_ID:",len(set(hh_counties.index.unique())-set(persons_df["household_id"].unique())))
     # print("persons county id:",persons_df["lcm_county_id"].unique())
     # print("income couties:",income_rates["lcm_county_id"].unique())
     # print("persons after merge with income and counties:", persons_df.shape[0])
@@ -1142,10 +1137,10 @@ def update_households_after_kids(persons, households, kids_moving):
     # print("Updating households...")
     persons_df = orca.get_table("persons").local
 
-    persons_local_cols = orca.get_table("persons").local_columns
+    persons_local_cols = persons_df.columns
 
     households_df = orca.get_table("households").local
-    households_local_cols = orca.get_table("households").local_columns
+    households_local_cols = households_df.columns
     hh_id = (
         orca.get_table("households").to_frame(columns=["lcm_county_id"]).reset_index()
     )
@@ -1436,7 +1431,7 @@ def kids_moving_model(persons, households):
     Returns:
         None
     """
-    persons_df = persons.local
+    persons_df = orca.get_table("persons").local
     persons_df["kid_moves"] = -99
     orca.add_table("persons", persons_df)
 
@@ -1782,6 +1777,7 @@ def update_married_households_random(persons, households, marriage_list):
     # household_df = household_df.set_index("household_id")
     # household_df.update(agg_households)
     household_df.update(household_agg)
+    # household_df.loc[household_agg.index, persons_local_cols] = household_agg.loc[household_agg, persons_local_cols].to_numpy()
 
     final["MAR"] = np.where(final["new_mar"] == 2, 1, final["MAR"])
     # p_df.update(final["MAR"])
@@ -1848,9 +1844,9 @@ def update_married_households_random(persons, households, marriage_list):
         )
     else:
         new_married_table = pd.DataFrame(
-                {"married": (marriage_list == 1).sum(),
-                "cohabitated": (marriage_list == 2).sum(),
-            })
+                [[(marriage_list == 1).sum(), (marriage_list == 2).sum()]],
+                columns=["married", "cohabitated"]
+            )
         married_table = pd.concat([married_table, new_married_table],
                                   ignore_index=True)
 
@@ -2808,6 +2804,9 @@ def update_divorce(persons, households, divorce_list):
     persons_df.update(staying_house[persons_local_cols])
     persons_df.update(leaving_house[persons_local_cols])
 
+    # persons_df.loc[staying_house.index, persons_local_cols] = staying_house.loc[staying_house.index, persons_local_cols].to_numpy()
+    # persons_df.loc[leaving_house.index, persons_local_cols] = leaving_house.loc[leaving_house.index, persons_local_cols].to_numpy()
+
     # add to orca
     orca.add_table("households", new_households[households_local_cols])
     orca.add_table("persons", persons_df[persons_local_cols])
@@ -2998,17 +2997,20 @@ def households_reorg(persons, households):
     print(cohabitate_x_list.value_counts())
     
     ######### UPDATING
+    print("cohabitation restructuring")
     update_cohabitating_households(persons, households, cohabitate_x_list)
     print_household_stats()
     
+    print("married restructuring")
     update_married_households_random(persons, households, marriage_list)
     print_household_stats()
     
     # update_cohabitating_households(persons, households, cohabitate_x_list)
     # print_household_stats()
     
+    print("divorce restructuring")
     update_divorce(persons, households, divorce_list)
-    print_household_stats
+    print_household_stats()
 
 
 
@@ -3028,8 +3030,9 @@ def print_household_stats():
 
 @orca.step("print_marr_stats")
 def print_marr_stats():
-    persons = orca.get_table("persons").local
-    print(persons["MAR"].value_counts().sort_values())
+    persons_stats = orca.get_table("persons").local
+    persons_stats = persons_stats[persons_stats["age"]>=15]
+    print(persons_stats["MAR"].value_counts().sort_values())
 
 # -----------------------------------------------------------------------------------------
 # TRANSITION
@@ -3901,6 +3904,7 @@ if orca.get_injectable("running_calibration_routine") == False:
             "update_age",
             "household_stats",
             "households_reorg",
+            "household_stats",
             "kids_moving_model",
             "household_stats",
             "fatality_model",
@@ -3909,7 +3913,6 @@ if orca.get_injectable("running_calibration_routine") == False:
             "household_stats",
             "education_model",
             "household_stats",
-            "update_income",
             "generate_metrics",
             "export_demo_stats",
         ]
