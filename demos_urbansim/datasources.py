@@ -101,6 +101,18 @@ rel_map_data_name = "data/relmap_%s.csv" % region_code
 rel_map_data = pd.read_csv(rel_map_data_name).set_index("index")
 orca.add_table("rel_map", rel_map_data)
 
+observed_births_data_name = "outputs/calibration/%s/births_over_time_obs.csv" % region_code
+observed_births_data = pd.read_csv(observed_births_data_name) 
+orca.add_table("observed_births_data", observed_births_data)
+
+observed_fatalities_data_name = "outputs/calibration/%s/mortalities_over_time_obs.csv" % region_code
+observed_fatalities_data = pd.read_csv(observed_fatalities_data_name)
+orca.add_table("observed_fatalities_data", observed_fatalities_data)
+
+# observed_enrollment_data_name = "outputs/calibration/%s/enrollment_over_time_obs.csv" % region_code
+# observed_enrollment_data = pd.read_csv(observed_enrollment_data_name)
+# orca.add_table("observed_enrollment_data", observed_enrollment_data)
+
 
 if not all_local:
     if not os.path.exists("data/%s" % data_name):

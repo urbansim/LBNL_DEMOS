@@ -83,14 +83,14 @@ def agebin5_mo(persons):
 @orca.column('persons')
 def gender1(persons):
     p = persons.to_frame(columns=['sex'])
-    return p.eq(1) * 1
+    return p.eq(1).astype(int)
 
 
 # Female
 @orca.column('persons')
 def gender2(persons):
     p = persons.to_frame(columns=['sex'])
-    return p.eq(2) * 1
+    return p.eq(2).astype(int)
 
 
 @orca.column('persons')
@@ -102,13 +102,13 @@ def employbin1(persons):
 @orca.column('persons')
 def employbin2(persons):
     p = persons.to_frame(columns=['worker', 'age'])
-    return p['worker'].eq(0) * p['age'].lt(60) * 1
+    return (p['worker'].eq(0) & p['age'].lt(60)).astype(int)
 
 
 @orca.column('persons')
 def employbin3(persons):
     p = persons.to_frame(columns=['worker', 'age'])
-    return p['worker'].eq(0) * p['age'].ge(60) * 1
+    return (p['worker'].eq(0) & p['age'].ge(60)).astype(int)
 
 @orca.column('persons')
 def employ2_agebin2_mo(persons):
@@ -344,26 +344,26 @@ def edu3_agebin5_mo(persons):
 @orca.column('persons')
 def marital1(persons):
     p = persons.to_frame(columns=['MAR'])
-    return p.eq(1) * 1
+    return p.eq(1).astype(int)
 
 
 @orca.column('persons')
 def marital2(persons):
     p = persons.to_frame(columns=['MAR'])
-    return p.eq(2) * 1
+    return p.eq(2).astype(int)
 
 
 @orca.column('persons')
 def marital3(persons):
     p = persons.to_frame(columns=['MAR'])
-    print(persons.local.columns)
-    return p.eq(3) * 1
+    # print(persons.local.columns)
+    return p.eq(3).astype(int)
 
 
 @orca.column('persons')
 def marital4(persons):
     p = persons.to_frame(columns=['MAR'])
-    return p.gt(3) * 1
+    return p.gt(3).astype(int)
 
 
 @orca.column('persons')
@@ -606,7 +606,7 @@ def hh_birth_agebin1(persons, households):
     households_df = households.to_frame(columns=["have_spouse"]).reset_index()
     df = df.merge(households_df, on="household_id")
     # subset = df[df["relate"].isin([0, 1])]
-    print("DF shape:", df.shape[0])
+    # print("DF shape:", df.shape[0])
     df.loc[:,"is_head"] = np.where(df["relate"]==0, 1, 0)
     df.loc[:,"is_female"] = np.where(df["sex"]==2, 1, 0)
     df.loc[:,"female_head"] = df["is_head"] * df["is_female"]
@@ -622,7 +622,7 @@ def hh_birth_agebin1(persons, households):
         head_spouse = ("head_spouse", "sum")
     ).reset_index()
     df.loc[:, "age_final"] = np.where(df["head_spouse"]>=2, df["age_female"], df["age_head"])
-    print("NEW DF", df.shape[0])
+    # print("NEW DF", df.shape[0])
     return np.where(df["age_final"]<=27, 1, 0)
 
 @orca.column('households')
@@ -646,7 +646,7 @@ def hh_birth_agebin2(persons, households):
         head_spouse = ("head_spouse", "sum")
     ).reset_index()
     df.loc[:, "age_final"] = np.where(df["head_spouse"]>=2, df["age_female"], df["age_head"])
-    print(df.shape[0])
+    # print(df.shape[0])
     return np.where(df["age_final"].between(27, 35, inclusive='right'), 1, 0)
 
 # @orca.column('households')
@@ -1678,8 +1678,8 @@ def register_predominant_building_type_cat(building_type):
 
 def register_sub_skim(threshold, impedance_column, units, sub_skim_name):
     travel_data = orca.get_table('travel_data').to_frame().reset_index(level=1)
-    print(travel_data.columns)
-    print(travel_data.index)
+    # print(travel_data.columns)
+    # print(travel_data.index)
     if units == 'km':
         threshold = threshold * 0.621
     travel_data = travel_data[travel_data[impedance_column] < threshold]
@@ -1740,8 +1740,8 @@ def register_disag_var(table_from, table_to, column_name, prefix=True):
         disag_col_name = column_name
     @orca.column(table_to, disag_col_name, cache=True, cache_scope='iteration')
     def column_func():
-        print(column_name)
-        print(table_from)
+        # print(column_name)
+        # print(table_from)
         from_df = orca.get_table(table_from).to_frame(column_name)
         from_idx = from_df.index.name
         to_df = orca.get_table(table_to).to_frame(from_idx)
@@ -1791,10 +1791,10 @@ def register_ln_variable(table_name, col):
 def register_standardized_variable(table_name, col):
     @orca.column(table_name, 'st_' + col, cache=True, cache_scope='iteration')
     def column_func():
-        print("here", str(table_name))
-        print('st_' + col)
-        print(table_name)
-        print(col)
+        # print("here", str(table_name))
+        # print('st_' + col)
+        # print(table_name)
+        # print(col)
         df = orca.get_table(table_name).to_frame(col)
         df['st_col'] = (df[col] - df[col].mean())/df[col].std()
         return df['st_col'].fillna(1)
