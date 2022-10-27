@@ -109,6 +109,10 @@ observed_fatalities_data_name = "outputs/calibration/%s/mortalities_over_time_ob
 observed_fatalities_data = pd.read_csv(observed_fatalities_data_name)
 orca.add_table("observed_fatalities_data", observed_fatalities_data)
 
+observed_marrital_data_name = "outputs/calibration/%s/marrital_status_over_time_obs.csv" % region_code
+observed_marrital_data = pd.read_csv(observed_marrital_data_name)
+orca.add_table("observed_marrital_data", observed_marrital_data)
+
 # observed_enrollment_data_name = "outputs/calibration/%s/enrollment_over_time_obs.csv" % region_code
 # observed_enrollment_data = pd.read_csv(observed_enrollment_data_name)
 # orca.add_table("observed_enrollment_data", observed_enrollment_data)
@@ -434,6 +438,7 @@ demos_tables = [
     "pmovein_over_time",
     "hhmovein_over_time",
     "student_population",
+    "marrital",
 ]
 
 for table in demos_tables:
@@ -443,6 +448,8 @@ for table in demos_tables:
 orca.add_injectable("max_p_id", orca.get_table("persons").local.index.max())
 orca.add_injectable("max_hh_id", orca.get_table("households").local.index.max())
 
+orca.add_injectable("persons_local_cols", orca.get_table("persons").local.columns)
+orca.add_injectable("households_local_cols", orca.get_table("households").local.columns)
 # -----------------------------------------------------------------------------------------
 # ADD OUTPUT FOLDER
 # -----------------------------------------------------------------------------------------
