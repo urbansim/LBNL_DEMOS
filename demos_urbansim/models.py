@@ -255,7 +255,7 @@ def update_income(persons, households, year):
     # print("persons after merge with counties: ", persons_df.shape[0])
     # breakpoint()
     persons_df = (persons_df.reset_index().merge(income_rates, on=["lcm_county_id"]).set_index("person_id"))
-    print("HH_ID - HH_P_ID:",len(set(hh_counties.index.unique())-set(persons_df["household_id"].unique())))
+    # print("HH_ID - HH_P_ID:",len(set(hh_counties.index.unique())-set(persons_df["household_id"].unique())))
     persons_df["earning"] = persons_df["earning"] * (1 + persons_df["rate"])
 
     new_incomes = persons_df.groupby("household_id").agg(income=("earning", "sum"))
@@ -265,7 +265,9 @@ def update_income(persons, households, year):
     households_df.update(new_incomes)
     households_df["income"] = households_df["income"].astype(int)
     # print("Households after update:", households_df.shape[0])
-
+    persons_df["member_id"] = persons_df.groupby("household_id")["relate"].rank(method="first", ascending=True).astype(int)
+    persons_local_columns = orca.get_injectable("persons_local_cols")
+    orca.add_table("persons", persons_df[persons_local_columns])
     orca.add_table("households", households_df[households_local_cols])
     orca.add_table("persons", persons_df[persons_local_cols])
     # Update income stats at the persons level
@@ -2563,12 +2565,13 @@ def update_divorce(persons, households, divorce_list):
         ~persons_divorce.index.isin(leaving_house.index)
     ].copy()
 
+    max_hh_id = orca.get_injectable('max_hh_id')
     # give the people leaving a new household id, update their marriage status, and other variables
     leaving_house["relate"] = 0
     leaving_house["MAR"] = 3
     leaving_house["member_id"] = 1
     leaving_house["household_id"] = (
-        np.arange(leaving_house.shape[0]) + households_df.index.max() + 1
+        np.arange(leaving_house.shape[0]) + max_hh_id + 1
     )
 
     # modify necessary variables for members staying in household
@@ -2974,20 +2977,20 @@ def households_reorg(persons, households, year):
         target_share = target.sum() / persons_df.shape[0]
 
         error = np.sqrt(np.mean((predicted_share - target_share)**2))
-        # print(error)
+        print(error)
         # print("here")
-        while error >= 0.01:
+        while error >= 0.02:
             # print("here")
             divorce_model.fitted_parameters[0] += np.log(target.sum()/predicted_num)
             # breakpoint()
             divorce_model.run()
             divorce_list = divorce_model.choices.astype(int)
             # print(fatality_list.sum())
-            predicted_num = (divorce_list.sum() + (persons_df[persons_df["age"]>=15]["MAR"]==3).sum())
+            predicted_num = (2*divorce_list.sum() + (persons_df[persons_df["age"]>=15]["MAR"]==3).sum())
             # print(predicted_num.sum())
-            predicted_share = (divorce_list.sum() + (persons_df[persons_df["age"]>=15]["MAR"]==3).sum()) / persons_df.shape[0]
+            predicted_share = predicted_num / persons_df.shape[0]
             error = np.sqrt(np.mean((predicted_share - target_share)**2))
-            # print(error)
+            print(error)
     else:
         # Running fatality Model
         divorce_model.run()
@@ -3042,6 +3045,9 @@ def households_reorg(persons, households, year):
     
     marrital = orca.get_table("marrital").to_frame()
     persons_df = orca.get_table("persons").local
+    persons_local_columns = orca.get_injectable("persons_local_cols")
+    persons_df["member_id"] = persons_df.groupby("household_id")["relate"].rank(method="first", ascending=True).astype(int)
+    orca.add_table("persons", persons_df[persons_local_columns])
     if marrital.empty:
         persons_stats = persons_df[persons_df["age"]>=15]["MAR"].value_counts().reset_index()
         marrital = pd.DataFrame(persons_stats)
@@ -3449,15 +3455,6 @@ def simple_transition(
             df.loc[not_added, "new_idx"] = df.loc[not_added].index.values
             df.set_index("new_idx", inplace=True, drop=True)
             df.index.name = idx_name
-            # new_added = np.arange(len(added)) + new_max + 1
-            # idx_name = updated.index.name
-            # updated['new_idx'] = None
-            # updated.loc[added, 'new_idx'] = new_added
-            # not_added = updated['new_idx'].isnull()
-            # breakpoint()
-            # updated.loc[not_added, 'new_idx'] = updated.loc[not_added].index.values
-            # updated.set_index('new_idx', inplace=True, drop=True)
-            # updated.index.name = idx_name
             added = new_added
 
     df.loc[added, location_fname] = "-1"
