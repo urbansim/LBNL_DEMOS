@@ -215,57 +215,33 @@ def update_income(persons, households, year):
         households (DataFrameWrapper): DataFrameWrapper of households table
         year (int): simulation year
     """
-    # Pulling data, income rates, and county IDs
     persons_df = orca.get_table("persons").local
     households_df = orca.get_table("households").local
 
     households_local_cols = households_df.columns
     persons_local_cols = persons_df.columns
-    print(persons_local_cols)
-    # breakpoint()
-    hh_counties = households_df["lcm_county_id"].copy()
 
+    hh_counties = households_df["lcm_county_id"].copy()
+    hh_counties = hh_counties.reset_index()
+    
     income_rates = orca.get_table("income_rates").to_frame()
     income_rates = income_rates[income_rates["year"] == year]
-
-    # print("persons household unique:", persons_df["household_id"].unique().shape[0])
-    # print("households id unique:", households_df.index.unique().shape[0])
-    # print("households shape:", households_df.shape[0])
-    # print("persons shape:", persons_df.shape[0])
-    # Merge persons with household counties and income rates
-    persons_df = (persons_df.reset_index().merge(hh_counties.reset_index(), on=["household_id"]).set_index("person_id"))
-    # print("persons after merge with counties: ", persons_df.shape[0])
-    # breakpoint()
-    persons_df = (persons_df.reset_index().merge(income_rates, on=["lcm_county_id"]).set_index("person_id"))
-    # print("HH_ID - HH_P_ID:",len(set(hh_counties.index.unique())-set(persons_df["household_id"].unique())))
+    persons_df = persons_df.reset_index()
+    persons_df = (persons_df.merge(hh_counties, on=["household_id"]).set_index("person_id"))
+    persons_df = persons_df.reset_index()
+    persons_df = (persons_df.merge(income_rates, on=["lcm_county_id"]).set_index("person_id"))
     persons_df["earning"] = persons_df["earning"] * (1 + persons_df["rate"])
 
     new_incomes = persons_df.groupby("household_id").agg(income=("earning", "sum"))
-    # print("Incomes:", new_incomes.shape[0])
-    # print("households before update:", households_df.shape[0])
-
+    
     households_df.update(new_incomes)
     households_df["income"] = households_df["income"].astype(int)
-    # print("Households after update:", households_df.shape[0])
     persons_df["member_id"] = persons_df.groupby("household_id")["relate"].rank(method="first", ascending=True).astype(int)
     persons_local_columns = orca.get_injectable("persons_local_cols")
+    
     orca.add_table("persons", persons_df[persons_local_columns])
     orca.add_table("households", households_df[households_local_cols])
     orca.add_table("persons", persons_df[persons_local_cols])
-    # Update income stats at the persons level
-    income_over_time = orca.get_table("income_over_time").to_frame()
-    if income_over_time.empty:
-        income_over_time = pd.DataFrame(
-            data={"year": [year], "mean_income": [persons_df["earning"].mean()]}
-        )
-    else:
-        new_income_over_time = pd.DataFrame(
-                data={"year": [year], "mean_income": [persons_df["earning"].mean()]}
-            )
-        income_over_time = pd.concat([income_over_time,
-                                      new_income_over_time],
-                                     ignore_index=True)
-    orca.add_table("income_over_time", income_over_time)
 
 
 # Mortality model returns a list of 0s representing alive and 1 representing dead
