@@ -106,6 +106,20 @@ def add_temp_variables():
 
     orca.add_table("persons", persons)
 
+def update_max_id_metadata():
+    """Function that updates the person and household id
+    metadata.
+    """
+    metadata = orca.get_table("metadata").to_frame()
+    max_hh_id = metadata.loc["max_hh_id", "value"]
+    max_p_id = metadata.loc["max_p_id", "value"]
+    persons_df = orca.get_table("persons").local
+    households_df = orca.get_table("households").local
+    if households_df.index.max() > max_hh_id:
+        metadata.loc["max_hh_id", "value"] = households_df.index.max()
+    if persons_df.index.max() > max_p_id:
+        metadata.loc["max_p_id", "value"] = persons_df.index.max()
+    orca.add_table("metadata", metadata)
 
 
 @orca.step("remove_temp_variables")
@@ -181,67 +195,6 @@ def fatality_model(persons, households, year):
     remove_dead_persons(persons, households, fatality_list, year)
     
     update_mortality_table(fatality_list, year)
-
-
-def update_mortality_table(fatality_list, year):
-    """Function to update the orca mortality
-    tables after running the mortality model
-
-    Args:
-        fatality_list (list): the fatalities prediction list
-        produced by the mortality model
-    """
-
-    mortalities = orca.get_table("mortalities").to_frame()
-    total_fatalities = fatality_list.sum()
-    summary_dict = {"year": [year], "count": [total_fatalities]}
-    if mortalities.empty:
-        mortalities = pd.DataFrame(data = summary_dict)
-    else:
-        mortalities_new = pd.DataFrame(data = summary_dict)
-        mortalities = pd.concat([mortalities, mortalities_new], ignore_index=True) 
-    
-    orca.add_table("mortalities", mortalities)
-
-
-
-@orca.step("update_income")
-def update_income(persons, households, year):
-    """
-    Updating income for persons and households
-
-    Args:
-        persons (DataFrameWrapper): DataFrameWrapper of persons table
-        households (DataFrameWrapper): DataFrameWrapper of households table
-        year (int): simulation year
-    """
-    persons_df = orca.get_table("persons").local
-    households_df = orca.get_table("households").local
-
-    households_local_cols = households_df.columns
-    persons_local_cols = persons_df.columns
-
-    hh_counties = households_df["lcm_county_id"].copy()
-    hh_counties = hh_counties.reset_index()
-    
-    income_rates = orca.get_table("income_rates").to_frame()
-    income_rates = income_rates[income_rates["year"] == year]
-    persons_df = persons_df.reset_index()
-    persons_df = (persons_df.merge(hh_counties, on=["household_id"]).set_index("person_id"))
-    persons_df = persons_df.reset_index()
-    persons_df = (persons_df.merge(income_rates, on=["lcm_county_id"]).set_index("person_id"))
-    persons_df["earning"] = persons_df["earning"] * (1 + persons_df["rate"])
-
-    new_incomes = persons_df.groupby("household_id").agg(income=("earning", "sum"))
-    
-    households_df.update(new_incomes)
-    households_df["income"] = households_df["income"].astype(int)
-    persons_df["member_id"] = persons_df.groupby("household_id")["relate"].rank(method="first", ascending=True).astype(int)
-    persons_local_columns = orca.get_injectable("persons_local_cols")
-    
-    orca.add_table("persons", persons_df[persons_local_columns])
-    orca.add_table("households", households_df[households_local_cols])
-    orca.add_table("persons", persons_df[persons_local_cols])
 
 
 # Mortality model returns a list of 0s representing alive and 1 representing dead
@@ -505,8 +458,70 @@ def produce_map_func(old_role):
             new_role = rel_map.loc[role, sold_role]
         return new_role
 
-    # Returns function that takes a persons old role and gives them a new one based on how the household is restructured
+    # Returns function that takes a persons old role and 
+    # gives them a new one based on how the household is restructured
     return inner
+
+
+def update_mortality_table(fatality_list, year):
+    """Function to update the orca mortality
+    tables after running the mortality model
+
+    Args:
+        fatality_list (list): the fatalities prediction list
+        produced by the mortality model
+    """
+
+    mortalities = orca.get_table("mortalities").to_frame()
+    total_fatalities = fatality_list.sum()
+    summary_dict = {"year": [year], "count": [total_fatalities]}
+    if mortalities.empty:
+        mortalities = pd.DataFrame(data = summary_dict)
+    else:
+        mortalities_new = pd.DataFrame(data = summary_dict)
+        mortalities = pd.concat([mortalities, mortalities_new], ignore_index=True) 
+    
+    orca.add_table("mortalities", mortalities)
+
+
+
+@orca.step("update_income")
+def update_income(persons, households, year):
+    """
+    Updating income for persons and households
+
+    Args:
+        persons (DataFrameWrapper): DataFrameWrapper of persons table
+        households (DataFrameWrapper): DataFrameWrapper of households table
+        year (int): simulation year
+    """
+    persons_df = orca.get_table("persons").local
+    households_df = orca.get_table("households").local
+
+    households_local_cols = households_df.columns
+    persons_local_cols = persons_df.columns
+
+    hh_counties = households_df["lcm_county_id"].copy()
+    hh_counties = hh_counties.reset_index()
+    
+    income_rates = orca.get_table("income_rates").to_frame()
+    income_rates = income_rates[income_rates["year"] == year]
+    persons_df = persons_df.reset_index()
+    persons_df = (persons_df.merge(hh_counties, on=["household_id"]).set_index("person_id"))
+    persons_df = persons_df.reset_index()
+    persons_df = (persons_df.merge(income_rates, on=["lcm_county_id"]).set_index("person_id"))
+    persons_df["earning"] = persons_df["earning"] * (1 + persons_df["rate"])
+
+    new_incomes = persons_df.groupby("household_id").agg(income=("earning", "sum"))
+    
+    households_df.update(new_incomes)
+    households_df["income"] = households_df["income"].astype(int)
+    persons_df["member_id"] = persons_df.groupby("household_id")["relate"].rank(method="first", ascending=True).astype(int)
+    persons_local_columns = orca.get_injectable("persons_local_cols")
+    
+    orca.add_table("persons", persons_df[persons_local_columns])
+    orca.add_table("households", households_df[households_local_cols])
+    orca.add_table("persons", persons_df[persons_local_cols])
 
 
 @orca.step("update_age")
