@@ -137,7 +137,6 @@ def household_stats(persons, households):
     print("HH in P_DF not in HH_DF:", len(sorted(set(orca.get_table("persons").local["household_id"].unique()) - set(orca.get_table("households").local.index.unique()))))
     print("HHs with NA persons:", orca.get_table("households").local["persons"].isna().sum())
     print("HH duplicates: ", orca.get_table("households").local.index.has_duplicates)
-    # print("Counties: ", households["lcm_county_id"].unique())
     print("Persons Size: ", orca.get_table("persons").local.index.unique().shape[0])
     print("Persons Duplicated: ", orca.get_table("persons").local.index.has_duplicates)
 
