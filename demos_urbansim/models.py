@@ -158,32 +158,22 @@ def fatality_model(persons, households, year):
 
     # Running fatality Model
     mortality = mm.get_step("mortality")
-    # mortality.run()
-    # fatality_list = mortality.choices.astype(int)
-    # print(fatality_list.sum(), " fatalities")
-
     mortality.run()
     fatality_list = mortality.choices.astype(int)
-    # print(fatality_list.sum(), " fatalities")
     predicted_share = fatality_list.sum() / persons_df.shape[0]
     observed_fatalities = orca.get_table("observed_fatalities_data").to_frame()
     target = observed_fatalities[observed_fatalities["year"]==year]["count"]
     target_share = target / persons_df.shape[0]
-
     error = np.sqrt(np.mean((fatality_list.sum() - target)**2))
-    # print("here")
-    while error >= 1000:
-        # print("here")
+    
+    while error >= 1000: #TODO: This threshold should be changed
         mortality.fitted_parameters[0] += np.log(target.sum()/fatality_list.sum())
-        # breakpoint()
         mortality.run()
         fatality_list = mortality.choices.astype(int)
-        # print(fatality_list.sum())
         predicted_share = fatality_list.sum() / persons_df.shape[0]
         error = np.sqrt(np.mean((fatality_list.sum() - target)**2))
-        # print(error)
 
-    print(fatality_list.sum(), " fatalities")
+    print(fatality_list.sum(), " predicted fatalities")
 
     # Updating the households and persons tables
     households = orca.get_table("households")
