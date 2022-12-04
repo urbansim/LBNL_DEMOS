@@ -179,19 +179,28 @@ def fatality_model(persons, households, year):
     households = orca.get_table("households")
     persons = orca.get_table("persons")
     remove_dead_persons(persons, households, fatality_list, year)
+    
+    update_mortality_table(fatality_list, year)
 
-    # Update mortalities table
+
+def update_mortality_table(fatality_list, year):
+    """Function to update the orca mortality
+    tables after running the mortality model
+
+    Args:
+        fatality_list (list): the fatalities prediction list
+        produced by the mortality model
+    """
+
     mortalities = orca.get_table("mortalities").to_frame()
+    total_fatalities = fatality_list.sum()
+    summary_dict = {"year": [year], "count": [total_fatalities]}
     if mortalities.empty:
-        mortalities = pd.DataFrame(
-            data={"year": [year], "count": [fatality_list.sum()]}
-        )
+        mortalities = pd.DataFrame(data = summary_dict)
     else:
-        mortalities_new = pd.DataFrame(
-            data={"year": [year], "count": [fatality_list.sum()]}
-        )
-
+        mortalities_new = pd.DataFrame(data = summary_dict)
         mortalities = pd.concat([mortalities, mortalities_new], ignore_index=True) 
+    
     orca.add_table("mortalities", mortalities)
 
 
