@@ -32,6 +32,31 @@ def intercept(persons):
 #     return np.zeros(size) - 99
 
 @orca.column('persons')
+def agebin1_labor(persons):
+    p = persons.to_frame(columns=['age'])['age']
+    return p.between(20, 30, inclusive='both') * 1
+
+@orca.column('persons')
+def agebin2_labor(persons):
+    p = persons.to_frame(columns=['age'])['age']
+    return p.between(31, 40, inclusive='both') * 1
+
+@orca.column('persons')
+def agebin3_labor(persons):
+    p = persons.to_frame(columns=['age'])['age']
+    return p.between(41, 50, inclusive='both') * 1
+
+@orca.column('persons')
+def agebin4_labor(persons):
+    p = persons.to_frame(columns=['age'])['age']
+    return p.between(51, 70, inclusive='both') * 1
+
+@orca.column('persons')
+def agebin5_labor(persons):
+    p = persons.to_frame(columns=['age'])['age']
+    return (p>70) * 1
+
+@orca.column('persons')
 def agebin1(persons):
     p = persons.to_frame(columns=['age'])['age']
     return p.between(16, 22, inclusive='both') * 1
