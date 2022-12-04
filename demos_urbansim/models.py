@@ -47,11 +47,6 @@ def status_report(year):
                 print("         ", var, ": ", unplaced[var].unique())
     print("------------------------------------------------")
 
-# @orca.step("print_columns")
-# def print_columns(persons, households):
-#     print(persons.local.columns)
-#     print(households.local.columns)
-
 @orca.step()
 def build_networks(blocks, block_groups, nodes, edges):
     nodes, edges = nodes.local, edges.local
@@ -176,26 +171,26 @@ def fatality_model(persons, households, year):
     # fatality_list = mortality.choices.astype(int)
     # print(fatality_list.sum(), " fatalities")
 
-    # mortality.run()
-    # fatality_list = mortality.choices.astype(int)
-    # # print(fatality_list.sum(), " fatalities")
-    # predicted_share = fatality_list.sum() / persons_df.shape[0]
-    # observed_fatalities = orca.get_table("observed_fatalities_data").to_frame()
-    # target = observed_fatalities[observed_fatalities["year"]==year]["count"]
-    # target_share = target / persons_df.shape[0]
+    mortality.run()
+    fatality_list = mortality.choices.astype(int)
+    # print(fatality_list.sum(), " fatalities")
+    predicted_share = fatality_list.sum() / persons_df.shape[0]
+    observed_fatalities = orca.get_table("observed_fatalities_data").to_frame()
+    target = observed_fatalities[observed_fatalities["year"]==year]["count"]
+    target_share = target / persons_df.shape[0]
 
-    # error = np.sqrt(np.mean((fatality_list.sum() - target)**2))
-    # # print("here")
-    # while error >= 1000:
-    #     # print("here")
-    #     mortality.fitted_parameters[0] += np.log(target.sum()/fatality_list.sum())
-    #     # breakpoint()
-    #     mortality.run()
-    #     fatality_list = mortality.choices.astype(int)
-    #     # print(fatality_list.sum())
-    #     predicted_share = fatality_list.sum() / persons_df.shape[0]
-    #     error = np.sqrt(np.mean((fatality_list.sum() - target)**2))
-    #     # print(error)
+    error = np.sqrt(np.mean((fatality_list.sum() - target)**2))
+    # print("here")
+    while error >= 1000:
+        # print("here")
+        mortality.fitted_parameters[0] += np.log(target.sum()/fatality_list.sum())
+        # breakpoint()
+        mortality.run()
+        fatality_list = mortality.choices.astype(int)
+        # print(fatality_list.sum())
+        predicted_share = fatality_list.sum() / persons_df.shape[0]
+        error = np.sqrt(np.mean((fatality_list.sum() - target)**2))
+        # print(error)
 
     print(fatality_list.sum(), " fatalities")
 
