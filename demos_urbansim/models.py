@@ -146,6 +146,9 @@ def household_stats(persons, households):
     """
     print("HH Size from Persons: ", orca.get_table("persons").local["household_id"].unique().shape[0])
     print("HH Size from Household: ", orca.get_table("households").local.index.unique().shape[0])
+    print("HH in HH_DF not in P_DF:", len(sorted(set(orca.get_table("households").local.index.unique()) - set(orca.get_table("persons").local["household_id"].unique()))))
+    print("HH in P_DF not in HH_DF:", len(sorted(set(orca.get_table("persons").local["household_id"].unique()) - set(orca.get_table("households").local.index.unique()))))
+    print("HHs with NA persons:", orca.get_table("households").local["persons"].isna().sum())
     print("HH duplicates: ", orca.get_table("households").local.index.has_duplicates)
     # print("Counties: ", households["lcm_county_id"].unique())
     print("Persons Size: ", orca.get_table("persons").local.index.unique().shape[0])
@@ -173,32 +176,26 @@ def fatality_model(persons, households, year):
     # fatality_list = mortality.choices.astype(int)
     # print(fatality_list.sum(), " fatalities")
 
-    if year <= 2019:
-        mortality.run()
-        fatality_list = mortality.choices.astype(int)
-        # print(fatality_list.sum(), " fatalities")
-        predicted_share = fatality_list.sum() / persons_df.shape[0]
-        observed_fatalities = orca.get_table("observed_fatalities_data").to_frame()
-        target = observed_fatalities[observed_fatalities["year"]==year]["count"]
-        target_share = target / persons_df.shape[0]
+    # mortality.run()
+    # fatality_list = mortality.choices.astype(int)
+    # # print(fatality_list.sum(), " fatalities")
+    # predicted_share = fatality_list.sum() / persons_df.shape[0]
+    # observed_fatalities = orca.get_table("observed_fatalities_data").to_frame()
+    # target = observed_fatalities[observed_fatalities["year"]==year]["count"]
+    # target_share = target / persons_df.shape[0]
 
-        error = np.sqrt(np.mean((fatality_list.sum() - target)**2))
-        # print("here")
-        while error >= 1000:
-            # print("here")
-            mortality.fitted_parameters[0] += np.log(target.sum()/fatality_list.sum())
-            # breakpoint()
-            mortality.run()
-            fatality_list = mortality.choices.astype(int)
-            # print(fatality_list.sum())
-            predicted_share = fatality_list.sum() / persons_df.shape[0]
-            error = np.sqrt(np.mean((fatality_list.sum() - target)**2))
-            # print(error)
-    else:
-        # Running fatality Model
-        mortality = mm.get_step("mortality")
-        mortality.run()
-        fatality_list = mortality.choices.astype(int)
+    # error = np.sqrt(np.mean((fatality_list.sum() - target)**2))
+    # # print("here")
+    # while error >= 1000:
+    #     # print("here")
+    #     mortality.fitted_parameters[0] += np.log(target.sum()/fatality_list.sum())
+    #     # breakpoint()
+    #     mortality.run()
+    #     fatality_list = mortality.choices.astype(int)
+    #     # print(fatality_list.sum())
+    #     predicted_share = fatality_list.sum() / persons_df.shape[0]
+    #     error = np.sqrt(np.mean((fatality_list.sum() - target)**2))
+    #     # print(error)
 
     print(fatality_list.sum(), " fatalities")
 
@@ -495,9 +492,19 @@ def remove_dead_persons(persons, households, fatality_list, year):
     orca.add_table("persons", alive[persons_columns])
     orca.add_table("households", houses[households_columns])
     orca.add_table("graveyard", dead_people[persons_columns])
-    orca.add_injectable(
-        "max_p_id", orca.get_injectable("max_p_id"), alive["household_id"].max()
-    )
+    # orca.add_injectable(
+    #     "max_p_id", orca.get_injectable("max_p_id"), alive["household_id"].max()
+    # )
+    metadata = orca.get_table("metadata").to_frame()
+    max_hh_id = metadata.loc["max_hh_id", "value"]
+    max_p_id = metadata.loc["max_p_id", "value"]
+    persons_df = orca.get_table("persons").local
+    households_df = orca.get_table("households").local
+    if households_df.index.max() > max_hh_id:
+        metadata.loc["max_hh_id", "value"] = households_df.index.max()
+    if persons_df.index.max() > max_p_id:
+        metadata.loc["max_p_id", "value"] = persons_df.index.max()
+    orca.add_table("metadata", metadata)
     # print("DONE updating persons.")
 
 
@@ -770,97 +777,149 @@ def education_model(persons, year):
     update_education_status(persons, student_list, year)
     
 
-# @orca.step("laborforce_model")
-# def laborforce_model(persons, year):
-#     """
-#     Run the education model and update the persons table
+@orca.step("laborforce_model")
+def laborforce_model(persons, year):
+    """
+    Run the education model and update the persons table
 
-#     Args:
-#         persons (DataFrameWrapper): DataFrameWrapper of the persons table
+    Args:
+        persons (DataFrameWrapper): DataFrameWrapper of the persons table
 
-#     Returns:
-#         None
-#     """
-#     # Add temporary variable
-#     persons_df = persons.local
+    Returns:
+        None
+    """
+    # Add temporary variable
+    persons_df = orca.get_table("persons").local
+    persons_df["stay_out"] = -99
+    persons_df["leaving_workforce"] = -99
+    orca.add_table("persons", persons_df)
+    persons_df = orca.get_table("persons").local
+    # breakpoint()
+    # Run The In Model
+    # print("Running the deucation model...")
+    in_workforce_model = mm.get_step("enter_labor_force")
+    in_workforce_model.run()
+    stay_unemployed_list = in_workforce_model.choices.astype(int)
+    predicted_share = stay_unemployed_list.sum() / stay_unemployed_list.shape[0]
+    observed_ent_workforce = orca.get_table("observed_entering_workforce").to_frame()
+    target_share = observed_ent_workforce[observed_ent_workforce["year"]==year]["share"]
+    target = target_share * stay_unemployed_list.shape[0]
 
-#     # Run the education model
-#     # print("Running the deucation model...")
-#     in_workforce_model = mm.get_step("entering_workforce")
-#     in_workforce_model.run()
-#     in_workforce_persons = in_workforce_model.choices.astype(int)
-#     out_workforce_model = mm.get_step("leaving_workforce")
-#     out_workforce_model.run()
-#     out_workforce_persons = in_workforce_model.choices.astype(int)
-#     # Update student status
-#     # print("Updating student status...")
-#     update_education_status(persons,
-#                             in_workforce_persons,
-#                             out_workforce_persons,
-#                             year)
-
-
-# def update_education_status(persons, in_workforce_persons, out_workforce_persons, year):
-#     """
-#     Function to update the worker status in persons table based
-#     on the labor participation model
-
-#     Args:
-#         persons (DataFrameWrapper): DataFrameWrapper of the persons table
-#         student_list (pd.Series): Pandas Series containing the output of
-#         the education model
-
-#     Returns:
-#         None
-#     """
-#     # Pull Data
-#     persons_df = persons.to_frame(
-#         columns=["household_id", "worker"]
-#     )
-#     persons_df["exit_workforce"] = out_workforce_persons
-#     # persons_df["exit_workforce"].fillna(2, inplace=True)
-
-#     persons_df["enter_workforce"] = in_workforce_persons
-#     # persons_df["enter_workforce"].fillna(2, inplace=True)
-
-#     # Update education levels
-#     persons_df["worker"] = np.where(persons_df["exit_workforce"]==1, 0, persons_df["worker"])
-#     persons_df["worker"] = np.where(persons_df["enter_workforce"]==1, 1, persons_df["worker"])
-
-#     # TODO: Similarly, do something for work from home
-
-#     orca.get_table("persons").update_col("worker", persons_df["worker"])
-
-#     # compute mean age of students
-#     # print("Updating students metrics...")
+    error = np.sqrt(np.mean((predicted_share.sum() - target_share)**2))
+    # print("here")
+    while error >= 0.01:
+        # print("here")
+        in_workforce_model.fitted_parameters[0] += np.log(target.sum()/stay_unemployed_list.sum())
+        # breakpoint()
+        in_workforce_model.run()
+        stay_unemployed_list = in_workforce_model.choices.astype(int)
+        # print(birth_list.sum())
+        predicted_share = stay_unemployed_list.sum() / stay_unemployed_list.shape[0]
+        error = np.sqrt(np.mean((predicted_share.sum() - target_share)**2))
+        print(error)
     
-#     agg_households = persons_df.groupby("household_id").agg(
-#         sum_workers = ("workers", "sum")
-#     )
-    
-#     agg_households["hh_workers"] = np.where(
-#         agg_households["workers"] == 0,
-#         "none",
-#         np.where(agg_households["workers"] == 1, "one", "two or more"))
-    
-#     # TODO: Make sure that the actual workers don't get restorted due to difference in indexing
-#     # TODO: Make sure there is a better way to do this
-#     orca.get_table("households").update_col("workers", agg_households["workers"])
-#     orca.get_table("households").update_col("hh_workers", agg_households["hh_workers"])
+    out_workforce_model = mm.get_step("exit_labor_force")
+    out_workforce_model.run()
+    exit_workforce_list = out_workforce_model.choices.astype(int)
+    predicted_share = exit_workforce_list.sum() / exit_workforce_list.shape[0]
+    observed_exit_workforce = orca.get_table("observed_exiting_workforce").to_frame()
+    target_share = observed_exit_workforce[observed_exit_workforce["year"]==year]["share"]
+    target = target_share * exit_workforce_list.shape[0]
+    # breakpoint()
+    error = np.sqrt(np.mean((predicted_share.sum() - target_share)**2))
+    # print("here")
+    while error >= 0.01:
+        # print("here")
+        out_workforce_model.fitted_parameters[0] += np.log(target.sum()/exit_workforce_list.sum())
+        # breakpoint()
+        out_workforce_model.run()
+        exit_workforce_list = out_workforce_model.choices.astype(int)
+        # print(birth_list.sum())
+        predicted_share = exit_workforce_list.sum() / exit_workforce_list.shape[0]
+        error = np.sqrt(np.mean((predicted_share.sum() - target_share)**2))
+        # breakpoint()
+        print(error)
 
-#     workers = persons_df[persons_df["student"] == 1]
-#     workers_over_time = orca.get_table("workers_over_time").to_frame()
-#     workers_population = orca.get_table("workers_population").to_frame()
-#     if workers_population.empty:
-#         workers_population = pd.DataFrame(
-#             data={"year": [year], "count": [workers.shape[0]]}
-#         )
-#     else:
-#         workers_population_new = pd.DataFrame(
-#             data={"year": [year], "count": [workers.shape[0]]}
-#         )
-#         workers_population = pd.concat([workers_population, workers_population_new])
-#     orca.add_table("workers_population", workers_population)
+    # breakpoint()
+
+    # Update labor status
+    update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year)
+
+
+def update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year):
+    """
+    Function to update the worker status in persons table based
+    on the labor participation model
+
+    Args:
+        persons (DataFrameWrapper): DataFrameWrapper of the persons table
+        student_list (pd.Series): Pandas Series containing the output of
+        the education model
+
+    Returns:
+        None
+    """
+    # Pull Data
+    persons_df = orca.get_table("persons").local
+    persons_cols = orca.get_injectable("persons_local_cols")
+    households_df = orca.get_table("households").local
+    households_cols = orca.get_injectable("households_local_cols")
+
+    persons_df["exit_workforce"] = exit_workforce_list
+    persons_df["exit_workforce"].fillna(2, inplace=True)
+
+    persons_df["remain_unemployed"] = stay_unemployed_list
+    persons_df["remain_unemployed"].fillna(2, inplace=True)
+
+    # Update education levels
+    persons_df["worker"] = np.where(persons_df["exit_workforce"]==1, 0, persons_df["worker"])
+    persons_df["worker"] = np.where(persons_df["remain_unemployed"]==0, 1, persons_df["worker"])
+
+    # TODO: Similarly, do something for work from home
+
+    
+    agg_households = persons_df.groupby("household_id").agg(
+        sum_workers = ("worker", "sum")
+    )
+    
+    agg_households["hh_workers"] = np.where(
+        agg_households["sum_workers"] == 0,
+        "none",
+        np.where(agg_households["sum_workers"] == 1, "one", "two or more"))
+          
+    # TODO: Make sure that the actual workers don't get restorted due to difference in indexing
+    # TODO: Make sure there is a better way to do this
+    #orca.get_table("households").update_col("workers", agg_households["workers"])
+    #orca.get_table("households").update_col("hh_workers", agg_households["hh_workers"])
+    households_df.update(agg_households)
+
+    workers = persons_df[persons_df["worker"] == 1]
+    exiting_workforce_df = orca.get_table("exiting_workforce").to_frame()
+    entering_workforce_df = orca.get_table("entering_workforce").to_frame()
+    if entering_workforce_df.empty:
+        entering_workforce_df = pd.DataFrame(
+            data={"year": [year], "count": [persons_df[persons_df["remain_unemployed"]==0].shape[0]]}
+        )
+    else:
+        entering_workforce_df_new = pd.DataFrame(
+            data={"year": [year], "count": [persons_df[persons_df["remain_unemployed"]==0].shape[0]]}
+        )
+        entering_workforce_df = pd.concat([entering_workforce_df, entering_workforce_df_new])
+
+    if exiting_workforce_df.empty:
+        exiting_workforce_df = pd.DataFrame(
+            data={"year": [year], "count": [persons_df[persons_df["exit_workforce"]==1].shape[0]]}
+        )
+    else:
+        exiting_workforce_df_new = pd.DataFrame(
+            data={"year": [year], "count": [persons_df[persons_df["exit_workforce"]==1].shape[0]]}
+        )
+        exiting_workforce_df = pd.concat([exiting_workforce_df, exiting_workforce_df_new])
+        
+    orca.add_table("entering_workforce", entering_workforce_df)
+    orca.add_table("exiting_workforce", exiting_workforce_df)
+    orca.add_table("persons", persons_df[persons_cols])
+    orca.add_table("households", households_df[households_cols])
 
 
 @orca.step("birth_model")
@@ -932,30 +991,26 @@ def birth_model(persons, households, year):
     # target = observed_births[observed_births["year"]==year]["count"]
     # target_share = target / eligible_hh_df.shape[0]
 
-    if year <= 2019:
-        birth.run()
-        birth_list = birth.choices.astype(int)
-        predicted_share = birth_list.sum() / eligible_hh_df.shape[0]
-        observed_births = orca.get_table("observed_births_data").to_frame()
-        target = observed_births[observed_births["year"]==year]["count"]
-        target_share = target / eligible_hh_df.shape[0]
+    birth.run()
+    birth_list = birth.choices.astype(int)
+    predicted_share = birth_list.sum() / eligible_hh_df.shape[0]
+    observed_births = orca.get_table("observed_births_data").to_frame()
+    target = observed_births[observed_births["year"]==year]["count"]
+    target_share = target / eligible_hh_df.shape[0]
 
-        error = np.sqrt(np.mean((birth_list.sum() - target)**2))
+    error = np.sqrt(np.mean((birth_list.sum() - target)**2))
+    # print("here")
+    while error >= 1000:
         # print("here")
-        while error >= 1000:
-            # print("here")
-            birth.fitted_parameters[0] += np.log(target.sum()/birth_list.sum())
-            # breakpoint()
-            birth.run()
-            birth_list = birth.choices.astype(int)
-            # print(birth_list.sum())
-            predicted_share = birth_list.sum() / eligible_hh_df.shape[0]
-            error = np.sqrt(np.mean((birth_list.sum() - target)**2))
-            # print(error)
-    else:
-        # Running fatality Model
+        birth.fitted_parameters[0] += np.log(target.sum()/birth_list.sum())
+        # breakpoint()
         birth.run()
         birth_list = birth.choices.astype(int)
+        # print(birth_list.sum())
+        predicted_share = birth_list.sum() / eligible_hh_df.shape[0]
+        error = np.sqrt(np.mean((birth_list.sum() - target)**2))
+        # print(error)
+
 
     # print(birth_list.sum(), " births")
 
@@ -1009,7 +1064,11 @@ def update_birth(persons, households, birth_list):
     grave = orca.get_table("pop_over_time").to_frame()
 
     # If not empty, update the highest index with max index of all people
-    highest_index = max(orca.get_injectable("max_p_id"), highest_index)
+    metadata = orca.get_table("metadata").to_frame()
+
+    max_p_id = metadata.loc["max_p_id", "value"]
+
+    highest_index = max(max_p_id, highest_index)
 
     if not grave.empty:
         graveyard = orca.get_table("graveyard")
@@ -1154,7 +1213,9 @@ def update_households_after_kids(persons, households, kids_moving):
     persons_df["moveoutkid"] = kids_moving
 
     highest_index = households_df.index.max()
-    current_max_household_id = max(orca.get_injectable("max_hh_id"), highest_index)
+    metadata = orca.get_table("metadata").to_frame()
+    max_hh_id = metadata.loc["max_hh_id", "value"]    
+    current_max_household_id = max(max_hh_id, highest_index)
 
     kids_leaving = persons_df[persons_df["moveoutkid"] == 1]["household_id"].unique()
     single_per_household = (
@@ -1389,9 +1450,9 @@ def update_households_after_kids(persons, households, kids_moving):
     # add to orca
     orca.add_table("households", households_df[households_local_cols])
     orca.add_table("persons", persons_df[persons_local_cols])
-    orca.add_injectable(
-        "max_hh_id", max(households_df.index.max(), orca.get_injectable("max_hh_id"))
-    )
+    # orca.add_injectable(
+    #     "max_hh_id", max(households_df.index.max(), orca.get_injectable("max_hh_id"))
+    # )
 
     metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
@@ -1656,7 +1717,9 @@ def update_married_households_random(persons, households, marriage_list):
     # print('Finished Pairing')
     # print("Updating households and persons table")
     # print(final.household_id.unique().shape[0])
-    current_max_id = max(orca.get_injectable("max_hh_id"), household_df.index.max())
+    metadata = orca.get_table("metadata").to_frame()
+    max_hh_id = metadata.loc["max_hh_id", "value"]
+    current_max_id = max(max_hh_id, household_df.index.max())
     final["hh_new_id"] = np.where(final["stay"].isin([1]), final["household_id"], np.where(final["stay"].isin([0]),final["partner_house"],final["new_household_id"] + current_max_id + 1))
 
     # final["new_relate"] = relate(final.shape[0])
@@ -1819,12 +1882,27 @@ def update_married_households_random(persons, households, marriage_list):
     # household_df = pd.concat([household_df, new_households])
     # breakpoint()
 
+    print("HH Size from Persons: ", p_df["household_id"].unique().shape[0])
+    print("HH Size from Household: ", household_df.index.unique().shape[0])
+    print("HH in HH_DF not in P_DF:", len(sorted(set(household_df.index.unique()) - set(p_df["household_id"].unique()))))
+    print("HH in P_DF not in HH_DF:", len(sorted(set(p_df["household_id"].unique()) - set(household_df.index.unique()))))
+    print("HHs with NA persons:", household_df["persons"].isna().sum())
+    print("HH duplicates: ", household_df.index.has_duplicates)
+    # print("Counties: ", households["lcm_county_id"].unique())
+    print("Persons Size: ", p_df.index.unique().shape[0])
+    print("Persons Duplicated: ", p_df.index.has_duplicates)
+
+    if len(sorted(set(household_df.index.unique()) - set(p_df["household_id"].unique()))) > 0:
+        breakpoint()
+    if len(sorted(set(p_df["household_id"].unique()) - set(household_df.index.unique()))) > 0:
+        breakpoint()
+
     # print('Time to run marriage', sp.duration)
     orca.add_table("households", household_df[household_cols])
     orca.add_table("persons", p_df[persons_cols])
-    orca.add_injectable(
-        "max_hh_id", max(orca.get_injectable("max_hh_id"), household_df.index.max())
-    )
+    # orca.add_injectable(
+    #     "max_hh_id", max(orca.get_injectable("max_hh_id"), household_df.index.max())
+    # )
 
     # print("households size", household_df.shape[0])
     metadata = orca.get_table("metadata").to_frame()
@@ -2050,7 +2128,9 @@ def update_married_households(persons, households, marriage_list):
     # print("Finished Pairing")
     # print("Updating households and persons table")
     # print(final.household_id.unique().shape[0])
-    current_max_id = max(orca.get_injectable("max_hh_id"), household_df.index.max())
+    metadata = orca.get_table("metadata").to_frame()
+    max_hh_id = metadata.loc["max_hh_id", "value"]
+    current_max_id = max(max_hh_id, household_df.index.max())
 
     final["hh_new_id"] = np.where(
         final["stay"].isin([1]),
@@ -2252,9 +2332,9 @@ def update_married_households(persons, households, marriage_list):
     # print('Time to run marriage', sp.duration)
     orca.add_table("households", household_df[household_cols])
     orca.add_table("persons", p_df[persons_cols])
-    orca.add_injectable(
-        "max_hh_id", max(orca.get_injectable("max_hh_id"), household_df.index.max())
-    )
+    # orca.add_injectable(
+    #     "max_hh_id", max(orca.get_injectable("max_hh_id"), household_df.index.max())
+    # )
 
     # print("households size", household_df.shape[0])
 
@@ -2375,10 +2455,12 @@ def update_cohabitating_households(persons, households, cohabitate_list):
 
     households_df.update(households_new)
 
+    metadata = orca.get_table("metadata").to_frame()
+    max_hh_id = metadata.loc["max_hh_id", "value"]
     # Create household characteristics for new households formed
     leaving_house["household_id"] = (
         np.arange(len(breakup_hh))
-        + max(orca.get_injectable("max_hh_id"), households_df.index.max())
+        + max(max_hh_id, households_df.index.max())
         + 1
     )
     leaving_house["person"] = 1
@@ -2474,12 +2556,27 @@ def update_cohabitating_households(persons, households, cohabitate_list):
 
     persons_df = pd.concat([persons_df, leaving_house])
 
+    print("HH Size from Persons: ", persons_df["household_id"].unique().shape[0])
+    print("HH Size from Household: ", households_df.index.unique().shape[0])
+    print("HH in HH_DF not in P_DF:", len(sorted(set(households_df.index.unique()) - set(persons_df["household_id"].unique()))))
+    print("HH in P_DF not in HH_DF:", len(sorted(set(persons_df["household_id"].unique()) - set(households_df.index.unique()))))
+    print("HHs with NA persons:", households_df["persons"].isna().sum())
+    print("HH duplicates: ", households_df.index.has_duplicates)
+    # print("Counties: ", households["lcm_county_id"].unique())
+    print("Persons Size: ", persons_df.index.unique().shape[0])
+    print("Persons Duplicated: ", persons_df.index.has_duplicates)
+
+    if len(sorted(set(households_df.index.unique()) - set(persons_df["household_id"].unique()))) > 0:
+        breakpoint()
+    if len(sorted(set(persons_df["household_id"].unique()) - set(households_df.index.unique()))) > 0:
+        breakpoint()
+    
     # add to orca
     orca.add_table("households", households_df[households_local_cols])
     orca.add_table("persons", persons_df[persons_local_cols])
-    orca.add_injectable(
-        "max_hh_id", max(orca.get_injectable("max_hh_id"), households_df.index.max())
-    )
+    # orca.add_injectable(
+    #     "max_hh_id", max(orca.get_injectable("max_hh_id"), households_df.index.max())
+    # )
     metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
     max_p_id = metadata.loc["max_p_id", "value"]
@@ -2565,7 +2662,8 @@ def update_divorce(persons, households, divorce_list):
         ~persons_divorce.index.isin(leaving_house.index)
     ].copy()
 
-    max_hh_id = orca.get_injectable('max_hh_id')
+    metadata = orca.get_table("metadata").to_frame()
+    max_hh_id = metadata.loc["max_hh_id", "value"]
     # give the people leaving a new household id, update their marriage status, and other variables
     leaving_house["relate"] = 0
     leaving_house["MAR"] = 3
@@ -2811,9 +2909,9 @@ def update_divorce(persons, households, divorce_list):
     # add to orca
     orca.add_table("households", new_households[households_local_cols])
     orca.add_table("persons", persons_df[persons_local_cols])
-    orca.add_injectable(
-        "max_hh_id", max(orca.get_injectable("max_hh_id"), new_households.index.max())
-    )
+    # orca.add_injectable(
+    #     "max_hh_id", max(orca.get_injectable("max_hh_id"), new_households.index.max())
+    # )
     
     metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
@@ -2963,38 +3061,33 @@ def households_reorg(persons, households, year):
     divorce_model.filters = "index in " + list_ids
     divorce_model.out_filters = "index in " + list_ids
 
-    if year <= 2019:
-        divorce_model.run()
-        divorce_list = divorce_model.choices.astype(int)
-        print("Number of divorces:")
-        print(divorce_list.value_counts())
-        # breakpoint()
-        predicted_num = (2*divorce_list.sum() + (persons_df[persons_df["age"]>=15]["MAR"]==3).sum())
-        predicted_share = predicted_num / persons_df.shape[0]
+    divorce_model.run()
+    divorce_list = divorce_model.choices.astype(int)
+    # print("Number of divorces:")
+    # print(divorce_list.value_counts())
+    # # breakpoint()
+    # predicted_num = (2*divorce_list.sum() + (persons_df[persons_df["age"]>=15]["MAR"]==3).sum())
+    # predicted_share = predicted_num / persons_df.shape[0]
 
-        observed_marrital = orca.get_table("observed_marrital_data").to_frame()
-        target = observed_marrital[(observed_marrital["year"]==year) & (observed_marrital["MAR"]==3)]["count"]
-        target_share = target.sum() / persons_df.shape[0]
+    # observed_marrital = orca.get_table("observed_marrital_data").to_frame()
+    # target = observed_marrital[(observed_marrital["year"]==year) & (observed_marrital["MAR"]==3)]["count"]
+    # target_share = target.sum() / persons_df.shape[0]
 
-        error = np.sqrt(np.mean((predicted_share - target_share)**2))
-        print(error)
-        # print("here")
-        while error >= 0.02:
-            # print("here")
-            divorce_model.fitted_parameters[0] += np.log(target.sum()/predicted_num)
-            # breakpoint()
-            divorce_model.run()
-            divorce_list = divorce_model.choices.astype(int)
-            # print(fatality_list.sum())
-            predicted_num = (2*divorce_list.sum() + (persons_df[persons_df["age"]>=15]["MAR"]==3).sum())
-            # print(predicted_num.sum())
-            predicted_share = predicted_num / persons_df.shape[0]
-            error = np.sqrt(np.mean((predicted_share - target_share)**2))
-            print(error)
-    else:
-        # Running fatality Model
-        divorce_model.run()
-        divorce_list = divorce_model.choices.astype(int)
+    # error = np.sqrt(np.mean((predicted_share - target_share)**2))
+    # print(error)
+    # # print("here")
+    # while error >= 0.02:
+    #     # print("here")
+    #     divorce_model.fitted_parameters[0] += np.log(target.sum()/predicted_num)
+    #     # breakpoint()
+    #     divorce_model.run()
+    #     divorce_list = divorce_model.choices.astype(int)
+    #     # print(fatality_list.sum())
+    #     predicted_num = (2*divorce_list.sum() + (persons_df[persons_df["age"]>=15]["MAR"]==3).sum())
+    #     # print(predicted_num.sum())
+    #     predicted_share = predicted_num / persons_df.shape[0]
+    #     error = np.sqrt(np.mean((predicted_share - target_share)**2))
+    #     print(error)
         
     #########################################
     
@@ -3103,21 +3196,21 @@ def household_transition(households, persons, year, metadata):
             if control_totals[control_totals.index == year].hh_type.min() == -1:
                 control_totals = control_totals[['total_number_of_households']]
         full_transition(households, control_totals, 'total_number_of_households', year, 'block_id', linked_tables=linked_tables)
-    households = orca.get_table('households').local
-    households.loc[households['block_id'] == "-1", 'lcm_county_id'] = "-1"
-    households.index.rename('household_id', inplace=True)
+    households_df = orca.get_table('households').local
+    households_df.loc[households_df['block_id'] == "-1", 'lcm_county_id'] = "-1"
+    households_df.index.rename('household_id', inplace=True)
     persons_df = orca.get_table('persons').local
     # persons = persons.loc[persons['household_id'].isin(households.index.unique())]
-    orca.add_table('households', households)
+    orca.add_table('households', households_df)
     orca.add_table('persons', persons_df)
-    orca.add_injectable(
-        'max_hh_id', max(orca.get_injectable('max_hh_id'), households.index.max())
-    )
+    # orca.add_injectable(
+    #     'max_hh_id', max(orca.get_injectable("max_hh_id"), households.index.max())
+    # )
     metadata_df = orca.get_table('metadata').to_frame()
     max_hh_id = metadata_df.loc['max_hh_id', 'value']
     max_p_id = metadata_df.loc['max_p_id', 'value']
-    if households.index.max() > max_hh_id:
-        metadata_df.loc['max_hh_id', 'value'] = households.index.max()
+    if households_df.index.max() > max_hh_id:
+        metadata_df.loc['max_hh_id', 'value'] = households_df.index.max()
     if persons_df.index.max() > max_p_id:
         metadata_df.loc['max_p_id', 'value'] = persons_df.index.max()
     orca.add_table('metadata', metadata_df)
@@ -3947,6 +4040,7 @@ if orca.get_injectable("running_calibration_routine") == False:
         demo_models = [
             "update_age",
             "household_stats",
+            "laborforce_model",
             "households_reorg",
             "household_stats",
             "kids_moving_model",
@@ -3958,7 +4052,7 @@ if orca.get_injectable("running_calibration_routine") == False:
             "education_model",
             "household_stats",
             # "generate_metrics",
-            # "export_demo_stats",
+            "export_demo_stats",
         ]
         pre_processing_steps = price_models + ["build_networks", "generate_outputs"]
         rem_variables = ["remove_temp_variables"]
