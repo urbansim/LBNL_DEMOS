@@ -447,14 +447,16 @@ demos_tables = [
     "hhmovein_over_time",
     "student_population",
     "marrital",
+    "exiting_workforce",
+    "entering_workforce"
 ]
 
 for table in demos_tables:
     orca.add_table(table, pd.DataFrame())
 
 
-orca.add_injectable("max_p_id", orca.get_table("persons").local.index.max())
-orca.add_injectable("max_hh_id", orca.get_table("households").local.index.max())
+# orca.add_injectable("max_p_id", orca.get_table("persons").local.index.max())
+# orca.add_injectable("max_hh_id", orca.get_table("households").local.index.max())
 
 orca.add_injectable("persons_local_cols", orca.get_table("persons").local.columns)
 orca.add_injectable("households_local_cols", orca.get_table("households").local.columns)
