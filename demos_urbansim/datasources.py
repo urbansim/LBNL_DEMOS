@@ -113,6 +113,14 @@ observed_marrital_data_name = "outputs/calibration/%s/marrital_status_over_time_
 observed_marrital_data = pd.read_csv(observed_marrital_data_name)
 orca.add_table("observed_marrital_data", observed_marrital_data)
 
+observed_entering_workforce_data_name = "outputs/calibration/%s/entering_workforce_obs.csv" % region_code
+observed_entering_workforce_data = pd.read_csv(observed_entering_workforce_data_name)
+orca.add_table("observed_entering_workforce", observed_entering_workforce_data)
+
+observed_exiting_workforce_data_name = "outputs/calibration/%s/exiting_workforce_obs.csv" % region_code
+observed_exiting_workforce_data = pd.read_csv(observed_exiting_workforce_data_name)
+orca.add_table("observed_exiting_workforce", observed_exiting_workforce_data)
+
 # observed_enrollment_data_name = "outputs/calibration/%s/enrollment_over_time_obs.csv" % region_code
 # observed_enrollment_data = pd.read_csv(observed_enrollment_data_name)
 # orca.add_table("observed_enrollment_data", observed_enrollment_data)
