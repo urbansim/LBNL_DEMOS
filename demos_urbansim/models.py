@@ -30,7 +30,6 @@ print("importing models for region", orca.get_injectable("region_code"))
 # PREPROCESSING
 # -----------------------------------------------------------------------------------------
 
-
 @orca.step("status_report")
 def status_report(year):
     print("------------------------------------------------")
@@ -73,13 +72,6 @@ def build_networks(blocks, block_groups, nodes, edges):
 
     orca.add_injectable("net", net)
 
-
-# def read_yaml(path):
-#     """A function to read YAML file"""
-#     with open(path) as f:
-#         config = list(yaml.safe_load_all(f))[0]
-
-#     return config
 
 
 def simulation_mnl(data, coeffs):
