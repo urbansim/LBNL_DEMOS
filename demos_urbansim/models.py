@@ -683,55 +683,44 @@ def laborforce_model(persons, year):
     persons_df["leaving_workforce"] = -99
     orca.add_table("persons", persons_df)
     persons_df = orca.get_table("persons").local
-    # breakpoint()
+    
     # Run The In Model
-    # print("Running the deucation model...")
     in_workforce_model = mm.get_step("enter_labor_force")
     in_workforce_model.run()
+    
     stay_unemployed_list = in_workforce_model.choices.astype(int)
     predicted_share = stay_unemployed_list.sum() / stay_unemployed_list.shape[0]
     observed_ent_workforce = orca.get_table("observed_entering_workforce").to_frame()
     target_share = observed_ent_workforce[observed_ent_workforce["year"]==year]["share"]
     target = target_share * stay_unemployed_list.shape[0]
-
     error = np.sqrt(np.mean((predicted_share.sum() - target_share)**2))
-    # print("here")
+    
     while error >= 0.01:
-        # print("here")
         in_workforce_model.fitted_parameters[0] += np.log(target.sum()/stay_unemployed_list.sum())
-        # breakpoint()
         in_workforce_model.run()
         stay_unemployed_list = in_workforce_model.choices.astype(int)
-        # print(birth_list.sum())
         predicted_share = stay_unemployed_list.sum() / stay_unemployed_list.shape[0]
         error = np.sqrt(np.mean((predicted_share.sum() - target_share)**2))
-        print(error)
     
+    # Run The Out Model    
     out_workforce_model = mm.get_step("exit_labor_force")
     out_workforce_model.run()
+    
     exit_workforce_list = out_workforce_model.choices.astype(int)
     predicted_share = exit_workforce_list.sum() / exit_workforce_list.shape[0]
     observed_exit_workforce = orca.get_table("observed_exiting_workforce").to_frame()
     target_share = observed_exit_workforce[observed_exit_workforce["year"]==year]["share"]
     target = target_share * exit_workforce_list.shape[0]
-    # breakpoint()
     error = np.sqrt(np.mean((predicted_share.sum() - target_share)**2))
-    # print("here")
+    
     while error >= 0.01:
-        # print("here")
         out_workforce_model.fitted_parameters[0] += np.log(target.sum()/exit_workforce_list.sum())
-        # breakpoint()
         out_workforce_model.run()
         exit_workforce_list = out_workforce_model.choices.astype(int)
-        # print(birth_list.sum())
         predicted_share = exit_workforce_list.sum() / exit_workforce_list.shape[0]
         error = np.sqrt(np.mean((predicted_share.sum() - target_share)**2))
-        # breakpoint()
-        print(error)
 
-    # breakpoint()
 
-    # Update labor status
     update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year)
 
 
@@ -777,38 +766,48 @@ def update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year
         np.where(agg_households["sum_workers"] == 1, "one", "two or more"))
           
     # TODO: Make sure that the actual workers don't get restorted due to difference in indexing
-    # TODO: Make sure there is a better way to do this
-    #orca.get_table("households").update_col("workers", agg_households["workers"])
-    #orca.get_table("households").update_col("hh_workers", agg_households["hh_workers"])
     households_df.update(agg_households)
+    orca.add_table("persons", persons_df[persons_cols])
+    orca.add_table("households", households_df[households_cols])
+    
+    entering_workforce_size = persons_df[persons_df["remain_unemployed"]==0].shape[0]
+    exiting_workforce_size = persons_df[persons_df["exit_workforce"]==1].shape[0]
+    
+    update_labor_force_stats(entering_workforce_size, exiting_workforce_size, year)
 
-    workers = persons_df[persons_df["worker"] == 1]
+def update_labor_force_stats(entering_workforce, exiting_workforce, year):
+    """Function to update the statistics of the labor force flows.
+
+    Args:
+        entering_workforce (int): flows entering the workforce
+        exiting_workforce (int): flows exiting the workforce
+        year (int): year of simulation
+    """
+    
     exiting_workforce_df = orca.get_table("exiting_workforce").to_frame()
     entering_workforce_df = orca.get_table("entering_workforce").to_frame()
     if entering_workforce_df.empty:
         entering_workforce_df = pd.DataFrame(
-            data={"year": [year], "count": [persons_df[persons_df["remain_unemployed"]==0].shape[0]]}
+            data={"year": [year], "count": [entering_workforce]}
         )
     else:
         entering_workforce_df_new = pd.DataFrame(
-            data={"year": [year], "count": [persons_df[persons_df["remain_unemployed"]==0].shape[0]]}
+            data={"year": [year], "count": [entering_workforce]}
         )
         entering_workforce_df = pd.concat([entering_workforce_df, entering_workforce_df_new])
 
     if exiting_workforce_df.empty:
         exiting_workforce_df = pd.DataFrame(
-            data={"year": [year], "count": [persons_df[persons_df["exit_workforce"]==1].shape[0]]}
+            data={"year": [year], "count": [exiting_workforce]}
         )
     else:
         exiting_workforce_df_new = pd.DataFrame(
-            data={"year": [year], "count": [persons_df[persons_df["exit_workforce"]==1].shape[0]]}
+            data={"year": [year], "count": [exiting_workforce]}
         )
         exiting_workforce_df = pd.concat([exiting_workforce_df, exiting_workforce_df_new])
         
     orca.add_table("entering_workforce", entering_workforce_df)
     orca.add_table("exiting_workforce", exiting_workforce_df)
-    orca.add_table("persons", persons_df[persons_cols])
-    orca.add_table("households", households_df[households_cols])
 
 
 @orca.step("birth_model")
