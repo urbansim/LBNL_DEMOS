@@ -484,7 +484,6 @@ def update_mortality_table(fatality_list, year):
     orca.add_table("mortalities", mortalities)
 
 
-
 @orca.step("update_income")
 def update_income(persons, households, year):
     """
@@ -551,28 +550,23 @@ def update_age(persons, households):
     persons_df["person"] = 1
     persons_df["senior"] = np.where(persons_df["age"] >= 65, 1, 0)
     households_stats = persons_df.groupby(["household_id"]).agg(
-        children=("child", "sum"), seniors=("senior", "sum"), size=("person", "sum")
+        children=("child", "sum"),
+        seniors=("senior", "sum"),
+        size=("person", "sum")
     )
-    households_stats["hh_children"] = np.where(
-        households_stats["children"] > 0, "yes", "no"
-    )
+    
+    households_stats["hh_children"] = np.where(households_stats["children"] > 0, "yes", "no")
     households_stats["gt55"] = np.where(households_stats["seniors"] > 0, 1, 0)
-    households_stats["hh_seniors"] = np.where(
-        households_stats["seniors"] > 0, "yes", "no"
-    )
-    # Update age of household head in household table
-    # print("Updating household and persons tables...")
-    orca.get_table("households").update_col("age_of_head", households_df["age_of_head"])
-    orca.get_table("households").update_col(
-        "hh_age_of_head", households_df["hh_age_of_head"]
-    )
-    orca.get_table("households").update_col(
-        "hh_children", households_stats["hh_children"]
-    )
+    households_stats["hh_seniors"] = np.where(households_stats["seniors"] > 0, "yes", "no")
+
+    households_stats = household_stats.merge(households_df, left_index=True, right_index=True)
+
+    orca.get_table("households").update_col("age_of_head", households_stats["age_of_head"])
+    orca.get_table("households").update_col("hh_age_of_head", households_stats["hh_age_of_head"])
+    orca.get_table("households").update_col("hh_children", households_stats["hh_children"])
     orca.get_table("households").update_col("gt55", households_stats["gt55"])
-    orca.get_table("households").update_col(
-        "hh_seniors", households_stats["hh_seniors"]
-    )
+    orca.get_table("households").update_col("hh_seniors", households_stats["hh_seniors"])
+    
     orca.get_table("persons").update_col("age", persons_df["age"])
 
 
