@@ -232,7 +232,7 @@ def update_age(persons, households):
     households_stats["gt55"] = np.where(households_stats["seniors"] > 0, 1, 0)
     households_stats["hh_seniors"] = np.where(households_stats["seniors"] > 0, "yes", "no")
 
-    households_stats = household_stats.merge(households_df, left_index=True, right_index=True)
+    households_stats = households_stats.merge(households_df, left_index=True, right_index=True)
 
     orca.get_table("households").update_col("age_of_head", households_stats["age_of_head"])
     orca.get_table("households").update_col("hh_age_of_head", households_stats["hh_age_of_head"])
