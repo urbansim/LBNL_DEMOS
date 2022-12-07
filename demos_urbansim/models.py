@@ -713,18 +713,8 @@ def household_transition(households, persons, year, metadata):
     # persons = persons.loc[persons['household_id'].isin(households.index.unique())]
     orca.add_table('households', households_df)
     orca.add_table('persons', persons_df)
-    # orca.add_injectable(
-    #     'max_hh_id', max(orca.get_injectable("max_hh_id"), households.index.max())
-    # )
-    metadata_df = orca.get_table('metadata').to_frame()
-    max_hh_id = metadata_df.loc['max_hh_id', 'value']
-    max_p_id = metadata_df.loc['max_p_id', 'value']
-    if households_df.index.max() > max_hh_id:
-        metadata_df.loc['max_hh_id', 'value'] = households_df.index.max()
-    if persons_df.index.max() > max_p_id:
-        metadata_df.loc['max_p_id', 'value'] = persons_df.index.max()
-    orca.add_table('metadata', metadata_df)
-    # breakpoint()
+
+    update_max_id_metadata()
 
 @orca.step("job_transition")
 def job_transition(jobs, year):
@@ -2315,15 +2305,7 @@ def update_married_households_random(persons, households, marriage_list):
     #     "max_hh_id", max(orca.get_injectable("max_hh_id"), household_df.index.max())
     # )
 
-    # print("households size", household_df.shape[0])
-    metadata = orca.get_table("metadata").to_frame()
-    max_hh_id = metadata.loc["max_hh_id", "value"]
-    max_p_id = metadata.loc["max_p_id", "value"]
-    if household_df.index.max() > max_hh_id:
-        metadata.loc["max_hh_id", "value"] = household_df.index.max()
-    if p_df.index.max() > max_p_id:
-        metadata.loc["max_p_id", "value"] = p_df.index.max()
-    orca.add_table("metadata", metadata)
+    update_max_id_metadata()
     
     married_table = orca.get_table("marriage_table").to_frame()
     if married_table.empty:
@@ -2748,14 +2730,7 @@ def update_married_households(persons, households, marriage_list):
 
     # print("households size", household_df.shape[0])
 
-    metadata = orca.get_table("metadata").to_frame()
-    max_hh_id = metadata.loc["max_hh_id", "value"]
-    max_p_id = metadata.loc["max_p_id", "value"]
-    if household_df.index.max() > max_hh_id:
-        metadata.loc["max_hh_id", "value"] = household_df.index.max()
-    if p_df.index.max() > max_p_id:
-        metadata.loc["max_p_id", "value"] = p_df.index.max()
-    orca.add_table("metadata", metadata)
+    update_max_id_metadata()
 
     married_table = orca.get_table("marriage_table").to_frame()
     if married_table.empty:
@@ -2986,14 +2961,7 @@ def update_cohabitating_households(persons, households, cohabitate_list):
     # orca.add_injectable(
     #     "max_hh_id", max(orca.get_injectable("max_hh_id"), households_df.index.max())
     # )
-    metadata = orca.get_table("metadata").to_frame()
-    max_hh_id = metadata.loc["max_hh_id", "value"]
-    max_p_id = metadata.loc["max_p_id", "value"]
-    if households_df.index.max() > max_hh_id:
-        metadata.loc["max_hh_id", "value"] = households_df.index.max()
-    if persons_df.index.max() > max_p_id:
-        metadata.loc["max_p_id", "value"] = persons_df.index.max()
-    orca.add_table("metadata", metadata)
+    update_max_id_metadata()
 
 def update_households_after_kids(persons, households, kids_moving):
     """
@@ -3268,14 +3236,7 @@ def update_households_after_kids(persons, households, kids_moving):
     #     "max_hh_id", max(households_df.index.max(), orca.get_injectable("max_hh_id"))
     # )
 
-    metadata = orca.get_table("metadata").to_frame()
-    max_hh_id = metadata.loc["max_hh_id", "value"]
-    max_p_id = metadata.loc["max_p_id", "value"]
-    if households_df.index.max() > max_hh_id:
-        metadata.loc["max_hh_id", "value"] = households_df.index.max()
-    if persons_df.index.max() > max_p_id:
-        metadata.loc["max_p_id", "value"] = persons_df.index.max()
-    orca.add_table("metadata", metadata)
+    update_max_id_metadata()
 
     # print("Updating kids moving metrics...")
     kids_moving_table = orca.get_table("kids_move_table").to_frame()
@@ -3582,15 +3543,8 @@ def update_divorce(persons, households, divorce_list):
     # orca.add_injectable(
     #     "max_hh_id", max(orca.get_injectable("max_hh_id"), new_households.index.max())
     # )
-    
-    metadata = orca.get_table("metadata").to_frame()
-    max_hh_id = metadata.loc["max_hh_id", "value"]
-    max_p_id = metadata.loc["max_p_id", "value"]
-    if new_households.index.max() > max_hh_id:
-        metadata.loc["max_hh_id", "value"] = new_households.index.max()
-    if persons_df.index.max() > max_p_id:
-        metadata.loc["max_p_id", "value"] = persons_df.index.max()
-    orca.add_table("metadata", metadata)
+
+    update_max_id_metadata()
 
     # print("Updating divorce metrics...")
     divorce_table = orca.get_table("divorce_table").to_frame()
