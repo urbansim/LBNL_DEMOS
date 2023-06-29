@@ -1,0 +1,82 @@
+modelmanager_version: 0.2.dev9
+saved_object:
+  fitted_parameters:
+    bike_ASC: 1.8530845642089844
+    bus_ASC: 1.2055243253707886
+    bus_CBD: 1.39997398853302
+    coef_c: -0.1277095377445221
+    coef_ivt: -0.2643197178840637
+    sh2_ASC: 2.225558042526245
+    sh3_ASC: 1.1870958805084229
+    telecommute_ASC: -1.2794249057769775
+    tnc_ASC: 0.8990257382392883
+    train_ASC: -0.6813148260116577
+    train_CBD: 1.4672489166259766
+    walk_ASC: -0.20613323152065277
+  model_expression:
+    sov:
+      tour_sov_in_vehicle_time: coef_ivt
+      tour_sov_operating_cost: coef_c
+    sh2:
+      ASC: sh2_ASC
+      tour_sov_in_vehicle_time: coef_ivt
+      tour_sov_operating_cost: coef_c
+    sh3:
+      ASC: sh3_ASC
+      tour_sov_in_vehicle_time: coef_ivt
+      tour_sov_operating_cost: coef_c
+    bus:
+      ASC: bus_ASC
+      dest_cbd: bus_CBD
+      tour_bus_fare: coef_c
+      tour_bus_in_vehicle_time: coef_ivt
+    train:
+      ASC: train_ASC
+      dest_cbd: train_CBD
+      tour_train_fare: coef_c
+      tour_train_in_vehicle_time: coef_ivt
+    walk:
+      ASC: walk_ASC
+      walk_time_beyond_2_of_a_miles: coef_ivt
+      walk_time_up_to_2_miles: coef_ivt
+    bike:
+      ASC: bike_ASC
+      bike_time_beyond_6_of_a_miles: coef_ivt
+      bike_time_up_to_6_miles: coef_ivt
+    tnc:
+      ASC: tnc_ASC
+      tour_sov_in_vehicle_time: coef_ivt
+      tour_tnc_cost: coef_c
+      tour_tnc_wait_time: coef_ivt
+    telecommute:
+      ASC: telecommute_ASC
+  name: mode_choice_logsum
+  nest:
+    alternatives:
+    - alternatives:
+      - 1
+      - 2
+      - 3
+      coefficient: 1.3888888888888888
+      name: motorized
+    - alternatives:
+      - 4
+      - 5
+      coefficient: 1.3888888888888888
+      name: transit
+    - alternatives:
+      - 6
+      - 7
+      coefficient: 1.3888888888888888
+      name: non_motorize
+    - alternatives:
+      - 8
+      coefficient: 1.3888888888888888
+      name: tnc
+    - alternatives:
+      - 9
+      coefficient: 1.3888888888888888
+      name: telecommute
+    coefficient: 1.0
+    name: root
+  template: null
