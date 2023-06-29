@@ -4,6 +4,7 @@ import glob
 import orca
 import pandas as pd
 import numpy as np
+import openmatrix as omx
 from google.cloud import storage
 from urbansim_templates.data import LoadTable
 from urbansim_templates import modelmanager as mm
@@ -102,7 +103,7 @@ rel_map_data = pd.read_csv(rel_map_data_name).set_index("index")
 orca.add_table("rel_map", rel_map_data)
 
 observed_births_data_name = "outputs/calibration/%s/births_over_time_obs.csv" % region_code
-observed_births_data = pd.read_csv(observed_births_data_name) 
+observed_births_data = pd.read_csv(observed_births_data_name)
 orca.add_table("observed_births_data", observed_births_data)
 
 observed_fatalities_data_name = "outputs/calibration/%s/mortalities_over_time_obs.csv" % region_code
@@ -404,6 +405,35 @@ except Exception:
             df["agg_sector"] = -1
         ect = ect.append(df)
 orca.add_table("ect", ect.set_index("year"))
+
+# -----------------------------------------------------------------------------------------
+# ADD ACTIVITYSIM SKIMS DATA
+# -----------------------------------------------------------------------------------------
+skims = omx.open_file('data/skims_mpo_{}.omx'.format(region_code),'r')
+orca.add_injectable('skims', skims)
+
+# Mode Choice Constants (Consider moving them to .yaml file)
+# Here as a place holder for now
+orca.add_injectable('cost_per_mile', 18.0) # 18 cents per miles
+orca.add_injectable('walkThresh', 2.0) #2 miles
+orca.add_injectable('walkSpeed', 3.0) #3 miles per hour
+orca.add_injectable('bikeThresh', 6.0) #2 miles
+orca.add_injectable('bikeSpeed', 12.00) #3 miles per hour
+orca.add_injectable('ivt_cost_multiplier', 0.6)
+orca.add_injectable('costShareSr2', 1.75)
+orca.add_injectable('costShareSr3', 2.50)
+orca.add_injectable('short_i_wait_multiplier', 2.0)
+orca.add_injectable('waitThresh', 10.00)
+orca.add_injectable('long_i_wait_multiplier', 1.0 )
+orca.add_injectable('xwait_multiplier', 2.0)
+orca.add_injectable('wacc_multiplier', 2.0)
+orca.add_injectable('wegr_multiplier', 2.0)
+orca.add_injectable('shortWalk', 0.333)
+orca.add_injectable('longWalk', 0.667)
+orca.add_injectable('tnc_baseline', 2.20)
+orca.add_injectable('tnc_cost_minute', 0.24)
+orca.add_injectable('tnc_cost_mile', 1.33)
+orca.add_injectable('tnc_min_fare', 7.20)
 
 # -----------------------------------------------------------------------------------------
 # ADD DEMOS TABLES
