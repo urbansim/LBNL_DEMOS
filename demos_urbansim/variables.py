@@ -12,6 +12,109 @@ import mode_choice
 
 print('importing variables for region', orca.get_injectable('region_code'))
 
+
+# -----------------------------------------------------------------------------------------
+# WORK LOCATION CHOICE VARIABLES
+# -----------------------------------------------------------------------------------------
+@orca.column('zones')
+def mean_income(households):
+    h = households.to_frame(columns = ['income', 'home_taz'])
+    h = h.groupby('home_taz')['income'].mean()
+    return h.fillna(0)
+
+@orca.column('zones')
+def pct_hh_inc_under_25k(households):
+    h = households.to_frame(columns = ['home_taz', 'hh_inc_under_25k'])
+    h = h.groupby('home_taz')['hh_inc_under_25k'].mean()
+    return h.fillna(0)
+
+@orca.column('zones')
+def pct_hh_inc_25_to_75k(households):
+    h = households.to_frame(columns = ['home_taz', 'hh_inc_25_to_75k'])
+    h = h.groupby('home_taz')['hh_inc_25_to_75k'].mean()
+    return h.fillna(0)
+
+@orca.column('zones')
+def pct_hh_inc_75_to_200k(households):
+    h = households.to_frame(columns = ['home_taz', 'hh_inc_75_to_200k'])
+    h = h.groupby('home_taz')['hh_inc_75_to_200k'].mean()
+    return h.fillna(0)
+
+@orca.column('zones')
+def pct_no_higher_ed(persons):
+    p = persons.to_frame(columns = ['home_taz', 'no_higher_ed'])
+    p = p.groupby('home_taz')['no_higher_ed'].mean()
+    return p.fillna(0)
+
+@orca.column('zones')
+def pct_sector_tech(jobs):
+    j = jobs.to_frame(columns = ['taz', 'sector_tech'])
+    j = j.groupby('taz')['sector_tech'].mean()
+    return j.fillna(0)
+
+@orca.column('zones')
+def pct_sector_retail(jobs):
+    j = jobs.to_frame(columns = ['taz', 'sector_retail'])
+    j = j.groupby('taz')['sector_retail'].mean()
+    return j.fillna(0)
+
+@orca.column('zones', cache = True)
+def pct_sector_healthcare(jobs):
+    j = jobs.to_frame(columns = ['taz', 'sector_healthcare'])
+    j = j.groupby('taz')['sector_healthcare'].mean()
+    return j.fillna(0)
+
+@orca.column('households')
+def hh_inc_under_25k(households):
+    i = households.income
+    return i.between(-np.inf, 25000).astype(int)
+
+@orca.column('households')
+def hh_inc_25_to_75k(households):
+    i = households.income
+    return i.between(25000, 75000).astype(int)
+
+@orca.column('households')
+def hh_inc_75_to_200k(households):
+    i = households.income
+    return i.between(75000, 200000).astype(int)
+
+@orca.column('persons')
+def no_higher_ed(persons):
+    education = persons.edu
+    return education.between(-np.inf, 17).astype(int)
+
+@orca.column('jobs')
+def sector_retail(jobs):
+    return jobs.sector_id.isin(['44-45']).astype(int)
+
+@orca.column('jobs')
+def sector_healthcare(jobs):
+    return jobs.sector_id.isin(['62']).astype(int)
+
+@orca.column('jobs')
+def sector_tech(jobs):
+    return jobs.sector_id.isin(['51', '54']).astype(int)
+
+@orca.column('zones')
+def jobs_capacity(jobs):
+    capacity = jobs.taz.value_counts()
+#     capacity.index = capacity.index.astype(int)
+    return capacity
+
+@orca.column('persons')
+def taz_pct_no_higher_ed(persons, zones):
+    return misc.reindex(zones.pct_no_higher_ed, persons.home_taz)
+
+@orca.column('persons')
+def taz_pct_hh_inc_under_25k(persons, zones):
+    return misc.reindex(zones.pct_hh_inc_under_25k, persons.home_taz)
+
+@orca.column('blocks')
+def pct_sector_tech(jobs):
+    j = jobs.to_frame(columns = ['block_id', 'sector_tech'])
+    return j.groupby('block_id').agg({'sector_tech': 'mean'}).fillna(0)
+
 # -----------------------------------------------------------------------------------------
 # DEMOGRAPHIC VARIABLES
 # -----------------------------------------------------------------------------------------

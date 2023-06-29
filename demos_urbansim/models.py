@@ -26,6 +26,21 @@ import indicators
 
 print("importing models for region", orca.get_injectable("region_code"))
 
+@orca.step("work_location")
+def work_location(persons):
+
+    # This workaorund is necesary to make the work
+    # location choice run in batches, with improves
+    # simulation efficiency.
+
+    model = mm.get_step('wlcm')
+    model.run(chooser_batch_size = 500000)
+
+    work_block_id = persons['work_block_id']
+    persons.update_col('work_block_id', work_block_id.fillna('-1'))
+
+
+
 # -----------------------------------------------------------------------------------------
 # PREPROCESSING
 # -----------------------------------------------------------------------------------------
@@ -218,7 +233,7 @@ def fatality_model(persons, households, year):
             data={"year": [year], "count": [fatality_list.sum()]}
         )
 
-        mortalities = pd.concat([mortalities, mortalities_new], ignore_index=True) 
+        mortalities = pd.concat([mortalities, mortalities_new], ignore_index=True)
     orca.add_table("mortalities", mortalities)
 
 
@@ -574,7 +589,7 @@ def produce_map_func(old_role):
     """
     # old role is the previous number of the person who has now been promoted to head of the household
     sold_role = str(old_role)
- 
+
     def inner(role):
         rel_map = orca.get_table("rel_map").to_frame()
         if role == 0:
@@ -768,7 +783,7 @@ def education_model(persons, year):
     # Update student status
     # print("Updating student status...")
     update_education_status(persons, student_list, year)
-    
+
 
 # @orca.step("laborforce_model")
 # def laborforce_model(persons, year):
@@ -833,16 +848,16 @@ def education_model(persons, year):
 
 #     # compute mean age of students
 #     # print("Updating students metrics...")
-    
+
 #     agg_households = persons_df.groupby("household_id").agg(
 #         sum_workers = ("workers", "sum")
 #     )
-    
+
 #     agg_households["hh_workers"] = np.where(
 #         agg_households["workers"] == 0,
 #         "none",
 #         np.where(agg_households["workers"] == 1, "one", "two or more"))
-    
+
 #     # TODO: Make sure that the actual workers don't get restorted due to difference in indexing
 #     # TODO: Make sure there is a better way to do this
 #     orca.get_table("households").update_col("workers", agg_households["workers"])
@@ -1117,7 +1132,7 @@ def update_birth(persons, households, birth_list):
         metadata.loc["max_hh_id", "value"] = households_df.index.max()
     if combined_result.index.max() > max_p_id:
         metadata.loc["max_p_id", "value"] = combined_result.index.max()
-    
+
     orca.add_table("metadata", metadata)
     # orca.add_injectable("max_p_id", max(highest_index, orca.get_injectable("max_p_id")))
 
@@ -1412,7 +1427,7 @@ def update_households_after_kids(persons, households, kids_moving):
         new_kids_moving_table = pd.DataFrame(
             {"kids_moving_out": kids_moving_table.sum()}
         )
-        kids_moving_table = pd.concat([kids_moving_table, 
+        kids_moving_table = pd.concat([kids_moving_table,
                                        new_kids_moving_table],
                                       ignore_index=True)
     orca.add_table("kids_move_table", kids_moving_table)
@@ -1487,7 +1502,7 @@ def marriage_model(persons, households):
         update_married_households_random(persons, households, marriage_list)
     else:
         update_married_households(persons, households, marriage_list)
-        
+
 
 
 def update_married_households_random(persons, households, marriage_list):
@@ -1556,19 +1571,19 @@ def update_married_households_random(persons, households, marriage_list):
         else:
             result[1::2] = result[1::2] + 13
         return result
-    
+
     min_mar_male = relevant[(relevant["new_mar"] == 2) & (relevant["person_sex"] == "male")].shape[0]
     min_mar_female = relevant[(relevant["new_mar"] == 2) & (relevant["person_sex"] == "female")].shape[0]
 
     min_cohab_male = relevant[(relevant["new_mar"] == 1) & (relevant["person_sex"] == "male")].shape[0]
     min_cohab_female = relevant[(relevant["new_mar"] == 1) & (relevant["person_sex"] == "female")].shape[0]
-    
+
     min_mar = int(min(min_mar_male, min_mar_female))
     min_cohab = int(min(min_cohab_male, min_cohab_female))
-    
+
     print("Number of marriages:", min_mar)
     print("Number of cohabitations:", min_cohab)
-    
+
     if (min_mar == 0) or (min_mar == 0):
         return None
 
@@ -1577,7 +1592,7 @@ def update_married_households_random(persons, households, marriage_list):
     male_mar = relevant[(relevant["new_mar"] == 2) & (relevant["person_sex"] == "male")].sample(min_mar)
     female_coh = relevant[(relevant["new_mar"] == 1) & (relevant["person_sex"] == "female")].sample(min_cohab)
     male_coh = relevant[(relevant["new_mar"] == 1) & (relevant["person_sex"] == "male")].sample(min_cohab)
-    
+
     # print("Printing family sizes:")
     # print(female_mar.shape[0])
     # print(male_mar.shape[0])
@@ -1622,9 +1637,9 @@ def update_married_households_random(persons, households, marriage_list):
     # Pair up the people and classify what type of marriage it is
     # TODO speed up this code by a lot
     # relevant.sort_values("new_mar", inplace=True)
-    
-    
-    
+
+
+
     # Stay documentation
     # 0 - leaves household
     # 1 - stays
@@ -1835,7 +1850,7 @@ def update_married_households_random(persons, households, marriage_list):
     if p_df.index.max() > max_p_id:
         metadata.loc["max_p_id", "value"] = p_df.index.max()
     orca.add_table("metadata", metadata)
-    
+
     married_table = orca.get_table("marriage_table").to_frame()
     if married_table.empty:
         married_table = pd.DataFrame(
@@ -2502,7 +2517,7 @@ def cohabitation_model(persons, households):
     hh_df = households.to_frame(columns=["lcm_county_id"])
     hh_df.reset_index(inplace=True)
     hh_local_cols = orca.get_table("households").local_columns
-    
+
     cohabitation_model = orca.get_injectable("cohabitation_model")
     cohabitation_coeffs = pd.DataFrame(cohabitation_model["model_coeffs"])
     cohabitation_variables = pd.DataFrame(cohabitation_model["spec_names"])
@@ -2814,7 +2829,7 @@ def update_divorce(persons, households, divorce_list):
     orca.add_injectable(
         "max_hh_id", max(orca.get_injectable("max_hh_id"), new_households.index.max())
     )
-    
+
     metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
     max_p_id = metadata.loc["max_p_id", "value"]
@@ -2934,7 +2949,7 @@ def households_reorg(persons, households, year):
     print(marriage_list.value_counts())
     random_match = orca.get_injectable("random_match")
     ## ------------------------------------
-    
+
     # DIVORCE MODEL
     households_df = orca.get_table("households").local
     households_df["divorced"] = -99
@@ -2995,15 +3010,15 @@ def households_reorg(persons, households, year):
         # Running fatality Model
         divorce_model.run()
         divorce_list = divorce_model.choices.astype(int)
-        
+
     #########################################
-    
+
     # COHABITATION_TO_X Model
     persons_df = persons.local
     hh_df = households.to_frame(columns=["lcm_county_id"])
     hh_df.reset_index(inplace=True)
     hh_local_cols = orca.get_table("households").local_columns
-    
+
     cohabitation_model = orca.get_injectable("cohabitation_model")
     cohabitation_coeffs = pd.DataFrame(cohabitation_model["model_coeffs"])
     cohabitation_variables = pd.DataFrame(cohabitation_model["spec_names"])
@@ -3026,23 +3041,23 @@ def households_reorg(persons, households, year):
     cohabitate_x_list = simulation_mnl(data, cohabitation_coeffs)
     print("Cohabitation outcomes:")
     print(cohabitate_x_list.value_counts())
-    
+
     ######### UPDATING
     print("cohabitation restructuring")
     update_cohabitating_households(persons, households, cohabitate_x_list)
     print_household_stats()
-    
+
     print("married restructuring")
     update_married_households_random(persons, households, marriage_list)
     print_household_stats()
-    
+
     # update_cohabitating_households(persons, households, cohabitate_x_list)
     # print_household_stats()
-    
+
     print("divorce restructuring")
     update_divorce(persons, households, divorce_list)
     print_household_stats()
-    
+
     marrital = orca.get_table("marrital").to_frame()
     persons_df = orca.get_table("persons").local
     persons_local_columns = orca.get_injectable("persons_local_cols")
@@ -3314,7 +3329,7 @@ def full_transition(
             sampled_persons.loc[:,"person_id"] = np.where(sampled_persons["cum_count"]>0, sampled_persons["new_person_id"], sampled_persons["person_id"])
             sampled_persons.loc[:,"household_id"] = np.where(sampled_persons["cum_count"]>0, sampled_persons["new_household_id"], sampled_persons["household_id"])
             updated.loc[:,"household_id"] = updated.loc[:, "new_household_id"]
-            
+
             # sampled_households = updated[updated["cum_count"]>0]
             # sampled_households.loc[:, location_fname] = "-1"
             # old_households = updated[updated["cum_count"]==0]
@@ -3387,7 +3402,7 @@ def full_transition(
         #     # orca.get_table('persons')
         #     persons_local_columns = orca.get_table("persons").local_columns
         #     orca.add_table("persons", persons[persons_local_columns])
-    # breakpoint()        
+    # breakpoint()
     # print("Updated shape:", updated.shape[0])
     # print("Added shape:", added.shape[0])
     # print("Removed shape:", removed.shape[0])
@@ -3599,7 +3614,7 @@ def export(table_name):
     Args:
         table_name (string): Name of the orca table
     """
-    
+
     region_code = orca.get_injectable("region_code")
     output_folder = orca.get_injectable("output_folder")
     df = orca.get_table(table_name).to_frame()
@@ -3759,7 +3774,7 @@ def generate_metrics(year, persons, households):
     #     new_marrital["year"] = year
     #     marrital = pd.concat([marrital, new_marrital])
     # print(marrital)
-        
+
     orca.add_table("age_dist_over_time", age_over_time)
     orca.add_table("pop_size_over_time", pop_over_time)
     orca.add_table("student_population", students)
