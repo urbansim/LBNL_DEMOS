@@ -410,7 +410,7 @@ orca.add_table("ect", ect.set_index("year"))
 # ADD ACTIVITYSIM SKIMS DATA
 # -----------------------------------------------------------------------------------------
 skims = omx.open_file('data/skims_mpo_{}.omx'.format(region_code),'r')
-orca.add_injectable('skims', skims)
+orca.add_injectable('asim_skims', skims)
 
 # Mode Choice Constants (Consider moving them to .yaml file)
 # Here as a place holder for now

@@ -1759,39 +1759,39 @@ def ASC():
     return 1
 
 @orca.column('travel_data', cache=True)
-def tour_sov_in_vehicle_time(travel_data, skims):
+def tour_sov_in_vehicle_time(travel_data, asim_skims):
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
     ['from_zone_id', 'to_zone_id']
 
     #Outbound
-    outbound = np.array(skims['SOV_TIME__AM'])
+    outbound = np.array(asim_skims['SOV_TIME__AM'])
     value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
 
     #Inbound
-    inbound = np.array(skims['SOV_TIME__PM'])
+    inbound = np.array(asim_skims['SOV_TIME__PM'])
     value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
 
     return (value_outbound + value_inbound).apply(np.log1p)
 
 @orca.column('travel_data', cache=True)
-def tour_dist(travel_data, skims):
+def tour_dist(travel_data, asim_skims):
 
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
     #Outbound
-    outbound = np.array(skims['DIST'])
+    outbound = np.array(asim_skims['DIST'])
     value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
 
     #Inbound
-    inbound = np.array(skims['DIST'])
+    inbound = np.array(asim_skims['DIST'])
     value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
 
     return (value_outbound + value_inbound)
 
 
 @orca.column('travel_data', cache=True)
-def tour_sov_operating_cost(travel_data, skims, cost_per_mile):
+def tour_sov_operating_cost(travel_data, asim_skims, cost_per_mile):
 
     s = travel_data.tour_dist * cost_per_mile
 
@@ -1799,159 +1799,159 @@ def tour_sov_operating_cost(travel_data, skims, cost_per_mile):
 
 
 @orca.column('travel_data', cache=True)
-def tour_bus_in_vehicle_time(travel_data, skims):
+def tour_bus_in_vehicle_time(travel_data, asim_skims):
 
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
     #Outbound
-    outbound = np.array(skims['WLK_LOC_WLK_TOTIVT__AM'])/100
+    outbound = np.array(asim_skims['WLK_LOC_WLK_TOTIVT__AM'])/100
     value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
 
     #Inbound
-    inbound = np.array(skims['WLK_LOC_WLK_TOTIVT__PM'])/100
+    inbound = np.array(asim_skims['WLK_LOC_WLK_TOTIVT__PM'])/100
     value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
 
     return (value_outbound + value_inbound).apply(np.log1p).replace(0, 10.0) #Replace high high time to make transit very unactrative
 
 @orca.column('travel_data', cache=True)
-def tour_bus_fare(travel_data, skims):
+def tour_bus_fare(travel_data, asim_skims):
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
     #Outbound
-    outbound = np.array(skims['WLK_LOC_WLK_FAR__AM'])
+    outbound = np.array(asim_skims['WLK_LOC_WLK_FAR__AM'])
     value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
 
     #Inbound
-    inbound = np.array(skims['WLK_LOC_WLK_FAR__PM'])
+    inbound = np.array(asim_skims['WLK_LOC_WLK_FAR__PM'])
     value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
 
     return (value_outbound + value_inbound).apply(np.log1p).replace(0, 10.0)
 
 @orca.column('travel_data', cache=True)
-def tour_train_in_vehicle_time(travel_data, skims):
+def tour_train_in_vehicle_time(travel_data, asim_skims):
 
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
     #Outbound
-    outbound = np.array(skims['WLK_HVY_WLK_TOTIVT__AM'])/100
+    outbound = np.array(asim_skims['WLK_HVY_WLK_TOTIVT__AM'])/100
     value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
 
     #Inbound
-    inbound = np.array(skims['WLK_HVY_WLK_TOTIVT__PM'])/100
+    inbound = np.array(asim_skims['WLK_HVY_WLK_TOTIVT__PM'])/100
     value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
 
     return (value_outbound + value_inbound).apply(np.log1p).replace(0, 10.0) #Replace high high time to make transit very unactrative
 
 @orca.column('travel_data', cache=True)
-def tour_train_fare(travel_data, skims):
+def tour_train_fare(travel_data, asim_skims):
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
     #Outbound
-    outbound = np.array(skims['WLK_HVY_WLK_FAR__AM'])
+    outbound = np.array(asim_skims['WLK_HVY_WLK_FAR__AM'])
     value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
 
     #Inbound
-    inbound = np.array(skims['WLK_HVY_WLK_FAR__PM'])
+    inbound = np.array(asim_skims['WLK_HVY_WLK_FAR__PM'])
     value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
 
     return (value_outbound + value_inbound).apply(np.log1p).replace(0, 10.0)
 
 @orca.column('travel_data', cache=True)
-def walk_time_up_to_2_miles(travel_data, skims, walkThresh, walkSpeed):
+def walk_time_up_to_2_miles(travel_data, asim_skims, walkThresh, walkSpeed):
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
     #Outbound
-    outbound = np.array(skims['DISTWALK'])
+    outbound = np.array(asim_skims['DISTWALK'])
     value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id).clip(upper = walkThresh)
 
     #Inbound
-    inbound = np.array(skims['DISTWALK'])
+    inbound = np.array(asim_skims['DISTWALK'])
     value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id).clip(upper = walkThresh)
 
     return ((value_outbound + value_inbound) * 60/walkSpeed).apply(np.log1p)
 
 @orca.column('travel_data', cache=True)
-def walk_time_beyond_2_of_a_miles(travel_data, skims, walkThresh, walkSpeed):
+def walk_time_beyond_2_of_a_miles(travel_data, asim_skims, walkThresh, walkSpeed):
 
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
     #Outbound
-    outbound = np.array(skims['DISTWALK'])
+    outbound = np.array(asim_skims['DISTWALK'])
     value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
     value_outbound = (value_outbound -  walkThresh).clip(lower = 0)
 
     #Inbound
-    inbound = np.array(skims['DISTWALK'])
+    inbound = np.array(asim_skims['DISTWALK'])
     value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
     value_inbound = (value_inbound - walkThresh).clip(lower = 0)
 
     return ((value_outbound + value_inbound) * 60/walkSpeed).apply(np.log1p)
 
 @orca.column('travel_data', cache=True)
-def bike_time_up_to_6_miles(travel_data, skims, bikeThresh, bikeSpeed):
+def bike_time_up_to_6_miles(travel_data, asim_skims, bikeThresh, bikeSpeed):
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
     #Outbound
-    outbound = np.array(skims['DISTBIKE'])
+    outbound = np.array(asim_skims['DISTBIKE'])
     value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id).clip(upper = bikeThresh)
 
     #Inbound
-    inbound = np.array(skims['DISTBIKE'])
+    inbound = np.array(asim_skims['DISTBIKE'])
     value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id).clip(upper = bikeThresh)
 
     return ((value_outbound + value_inbound) * 60/bikeSpeed).apply(np.log1p)
 
 @orca.column('travel_data', cache=True)
-def bike_time_beyond_6_of_a_miles(travel_data, skims, bikeThresh, bikeSpeed):
+def bike_time_beyond_6_of_a_miles(travel_data, asim_skims, bikeThresh, bikeSpeed):
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
     #Outbound
-    outbound = np.array(skims['DISTBIKE'])
+    outbound = np.array(asim_skims['DISTBIKE'])
     value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
     value_outbound = (value_outbound -  bikeThresh).clip(lower = 0)
 
     #Inbound
-    inbound = np.array(skims['DISTBIKE'])
+    inbound = np.array(asim_skims['DISTBIKE'])
     value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id).clip(upper = 2)
     value_inbound = (value_inbound - bikeThresh).clip(lower = 0)
 
     return ((value_outbound + value_inbound) * 60/bikeSpeed).apply(np.log1p)
 
 @orca.column('travel_data', cache=True)
-def outbound_dist(travel_data, skims):
+def outbound_dist(travel_data, asim_skims):
 
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
     #Outbound
-    outbound = np.array(skims['DIST'])
+    outbound = np.array(asim_skims['DIST'])
     value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
 
     return value_outbound
 
 @orca.column('travel_data', cache=True)
-def inbound_dist(travel_data, skims):
+def inbound_dist(travel_data, asim_skims):
 
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
     #Inbound
-    inbound = np.array(skims['DIST'])
+    inbound = np.array(asim_skims['DIST'])
     value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
 
     return value_inbound
 
 @orca.column('travel_data', cache=True)
-def tour_tnc_cost(travel_data, skims, tnc_baseline, tnc_cost_minute, tnc_cost_mile, tnc_min_fare):
+def tour_tnc_cost(travel_data, asim_skims, tnc_baseline, tnc_cost_minute, tnc_cost_mile, tnc_min_fare):
     ods = travel_data.to_frame(columns = ['outbound_dist', 'inbound_dist']).reset_index()
 
     #Outbound
-    outbound = np.array(skims['SOV_TIME__AM'])
+    outbound = np.array(asim_skims['SOV_TIME__AM'])
     time_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
     dist_outbound = ods.set_index(['from_zone_id', 'to_zone_id']).outbound_dist
     cost_outbound = tnc_baseline + tnc_cost_minute*time_outbound + tnc_cost_mile*dist_outbound
     cost_outbound = cost_outbound.where(cost_outbound >= tnc_min_fare, tnc_min_fare) * 100 #from dollars to cents
 
     #Inbound
-    inbound = np.array(skims['SOV_TIME__AM'])
+    inbound = np.array(asim_skims['SOV_TIME__AM'])
     time_inbound = skims_lookup(inbound, ods.from_zone_id, ods.to_zone_id)
     dist_inbound = ods.set_index(['from_zone_id', 'to_zone_id']).inbound_dist
     cost_inbound = tnc_baseline + tnc_cost_minute*time_inbound + tnc_cost_mile*dist_inbound
@@ -1960,15 +1960,15 @@ def tour_tnc_cost(travel_data, skims, tnc_baseline, tnc_cost_minute, tnc_cost_mi
     return (cost_outbound + cost_inbound).apply(np.log1p)
 
 @orca.column('travel_data', cache=True)
-def tour_tnc_wait_time(travel_data, skims):
+def tour_tnc_wait_time(travel_data, asim_skims):
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
     #Outbound
-    outbound = np.array(skims['RH_SOLO_WAIT__AM'])
+    outbound = np.array(asim_skims['RH_SOLO_WAIT__AM'])
     value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
 
     #Inbound
-    inbound = np.array(skims['RH_SOLO_WAIT__PM'])
+    inbound = np.array(asim_skims['RH_SOLO_WAIT__PM'])
     value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
 
     return (value_outbound + value_inbound).apply(np.log1p)
