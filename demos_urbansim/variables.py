@@ -1790,11 +1790,11 @@ def tour_dist(travel_data, asim_skims):
     return (value_outbound + value_inbound)
 
 
-@orca.column('travel_data', cache=True)
-def tour_sov_operating_cost(travel_data, asim_skims, cost_per_mile):
+@orca.column('travel_data')
+def tour_sov_operating_cost(travel_data, cost_per_mile, avg_parking_cost):
 
-    s = travel_data.tour_dist * cost_per_mile
-
+    s = travel_data.tour_dist * cost_per_mile + avg_parking_cost * 100 # PK CST dollars to cents
+    
     return (s).apply(np.log1p)
 
 
@@ -1811,7 +1811,7 @@ def tour_bus_in_vehicle_time(travel_data, asim_skims):
     inbound = np.array(asim_skims['WLK_LOC_WLK_TOTIVT__PM'])/100
     value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
 
-    return (value_outbound + value_inbound).apply(np.log1p).replace(0, 10.0) #Replace high high time to make transit very unactrative
+    return (value_outbound + value_inbound).apply(np.log1p).replace(0, 20.0) #Replace high high time to make transit very unactrative
 
 @orca.column('travel_data', cache=True)
 def tour_bus_fare(travel_data, asim_skims):
@@ -1825,7 +1825,7 @@ def tour_bus_fare(travel_data, asim_skims):
     inbound = np.array(asim_skims['WLK_LOC_WLK_FAR__PM'])
     value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
 
-    return (value_outbound + value_inbound).apply(np.log1p).replace(0, 10.0)
+    return (value_outbound + value_inbound).apply(np.log1p).replace(0, 20.0)
 
 @orca.column('travel_data', cache=True)
 def tour_train_in_vehicle_time(travel_data, asim_skims):
@@ -1840,7 +1840,7 @@ def tour_train_in_vehicle_time(travel_data, asim_skims):
     inbound = np.array(asim_skims['WLK_HVY_WLK_TOTIVT__PM'])/100
     value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
 
-    return (value_outbound + value_inbound).apply(np.log1p).replace(0, 10.0) #Replace high high time to make transit very unactrative
+    return (value_outbound + value_inbound).apply(np.log1p).replace(0, 20.0) #Replace high high time to make transit very unactrative
 
 @orca.column('travel_data', cache=True)
 def tour_train_fare(travel_data, asim_skims):
@@ -1854,7 +1854,7 @@ def tour_train_fare(travel_data, asim_skims):
     inbound = np.array(asim_skims['WLK_HVY_WLK_FAR__PM'])
     value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
 
-    return (value_outbound + value_inbound).apply(np.log1p).replace(0, 10.0)
+    return (value_outbound + value_inbound).apply(np.log1p).replace(0, 20.0)
 
 @orca.column('travel_data', cache=True)
 def walk_time_up_to_2_miles(travel_data, asim_skims, walkThresh, walkSpeed):
@@ -1982,6 +1982,15 @@ def dest_cbd(travel_data, zones):
     s = s.set_index(['from_zone_id', 'to_zone_id'])
     return s
 
+@orca.column('travel_data', cache = True)
+def dest_employment_density(travel_data, zones):
+    ods = travel_data.to_frame(columns = ['']).reset_index()
+    df = zones.to_frame(columns = ['employment_density'])
+
+    s = ods.merge(df, how = 'left', left_on = 'to_zone_id', right_index = True)
+    s = s.set_index(['from_zone_id', 'to_zone_id'])
+    return s.apply(np.log1p)
+
 ########################
 ## AUXILIARY COLUMNS ##
 ########################
@@ -2028,6 +2037,10 @@ def area_type(zones):
 @orca.column('zones', cache=True)
 def cbd(zones):
     return zones.area_type.isin(['0', '1']).astype(int)
+
+@orca.column('zones')
+def employment_density(zones):
+    return zones.totemp / zones.totacre
 
 # @orca.column('zones', cache=True)
 # def county_id(zones):

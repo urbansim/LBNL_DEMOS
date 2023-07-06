@@ -434,6 +434,7 @@ orca.add_injectable('tnc_baseline', 2.20)
 orca.add_injectable('tnc_cost_minute', 0.24)
 orca.add_injectable('tnc_cost_mile', 1.33)
 orca.add_injectable('tnc_min_fare', 7.20)
+orca.add_injectable('avg_parking_cost', 2.50)
 
 # -----------------------------------------------------------------------------------------
 # ADD DEMOS TABLES
