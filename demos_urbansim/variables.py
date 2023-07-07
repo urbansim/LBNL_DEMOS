@@ -115,6 +115,23 @@ def pct_sector_tech(jobs):
     j = jobs.to_frame(columns = ['block_id', 'sector_tech'])
     return j.groupby('block_id').agg({'sector_tech': 'mean'}).fillna(0)
 
+@orca.column('blocks')
+def pct_sector_retail(jobs):
+    j = jobs.to_frame(columns = ['block_id', 'sector_retail'])
+    return j.groupby('block_id').agg({'sector_retail': 'mean'}).fillna(0)
+
+@orca.column('travel_data')
+def dist_0_5(travel_data):
+    return travel_data.tour_dist.clip(0,5)
+
+@orca.column('travel_data')
+def dist_5_15(travel_data):
+    return (travel_data.tour_dist - 5).clip(0,10)
+
+@orca.column('travel_data')
+def dist_15plus(travel_data):
+    return (travel_data.tour_dist -  15).clip(0)
+
 # -----------------------------------------------------------------------------------------
 # DEMOGRAPHIC VARIABLES
 # -----------------------------------------------------------------------------------------
@@ -1794,7 +1811,7 @@ def tour_dist(travel_data, asim_skims):
 def tour_sov_operating_cost(travel_data, cost_per_mile, avg_parking_cost):
 
     s = travel_data.tour_dist * cost_per_mile + avg_parking_cost * 100 # PK CST dollars to cents
-    
+
     return (s).apply(np.log1p)
 
 

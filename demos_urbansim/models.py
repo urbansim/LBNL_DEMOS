@@ -3975,7 +3975,7 @@ if orca.get_injectable("running_calibration_routine") == False:
             # "generate_metrics",
             # "export_demo_stats",
         ]
-        pre_processing_steps = price_models + ["build_networks", "generate_outputs"]
+        pre_processing_steps = price_models + ["build_networks", "generate_outputs", "update_travel_data"]
         rem_variables = ["remove_temp_variables"]
         export_demo_steps = ["export_demo_stats"]
         household_stats = ["household_stats"]

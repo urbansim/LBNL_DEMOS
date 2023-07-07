@@ -5,6 +5,7 @@ import orca
 import pandas as pd
 import numpy as np
 import openmatrix as omx
+from itertools import product
 from google.cloud import storage
 from urbansim_templates.data import LoadTable
 from urbansim_templates import modelmanager as mm
@@ -435,6 +436,24 @@ orca.add_injectable('tnc_cost_minute', 0.24)
 orca.add_injectable('tnc_cost_mile', 1.33)
 orca.add_injectable('tnc_min_fare', 7.20)
 orca.add_injectable('avg_parking_cost', 2.50)
+
+def add_missing_combinations(df):
+    # Get the unique values from each index level
+    index_values = [df.index.get_level_values(level).unique() for level in range(df.index.nlevels)]
+
+    # Generate all possible pair combinations
+    index_pairs = list(product(*index_values))
+
+    # Reindex the DataFrame with all possible combinations
+    new_df = df.reindex(index=index_pairs)
+
+    return new_df
+
+@orca.step('update_travel_data')
+def update_travel_data(travel_data):
+    t = travel_data.local
+    t = add_missing_combinations(t)
+    orca.add_table('travel_data', t)
 
 # -----------------------------------------------------------------------------------------
 # ADD DEMOS TABLES
