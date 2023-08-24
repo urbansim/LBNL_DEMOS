@@ -1,19 +1,19 @@
-import orca
 import argparse
-import numpy as np
-import pandas as pd
+import grp
 import os
 import pwd
-import grp
+
+import numpy as np
+import orca
+import pandas as pd
 from urbansim_templates import modelmanager as mm
-from urbansim_templates.models import LargeMultinomialLogitStep
-from urbansim_templates.models import OLSRegressionStep
+from urbansim_templates.models import LargeMultinomialLogitStep, OLSRegressionStep
 
 
 def run(
         region_code, initial_run, base_year, forecast_year, random_seed,
         calibrated, calibrated_folder, multi_level, segmented, capacity_boost,
-        all_local, freq_interval, output_fname, skim_source, random_match, table_save):
+        all_local, freq_interval, output_fname, skim_source, random_match, table_save, scenario_name):
     orca.add_injectable('running_calibration_routine', False)
     orca.add_injectable('local_simulation', True)
     orca.add_injectable('initial_run', initial_run)
@@ -29,12 +29,11 @@ def run(
     orca.add_injectable('table_save', table_save)
     orca.add_injectable('skim_source', skim_source)
     orca.add_injectable('random_match', random_match)
-    orca.add_injectable('scenario_name', False)
+    orca.add_injectable('scenario_name', scenario_name)
 
     import datasources
-    import variables
-    # import update_demos
     import models
+    import variables
 
     if random_seed:
         np.random.seed(random_seed)
@@ -49,6 +48,7 @@ def run(
 
     # for table in models.demos_tables:
     #     orca.add_table(table, pd.DataFrame())
+    # print(datasources.hdf_tables)
     if table_save:
         out_tables = datasources.hdf_tables + ["graveyard"]
     else:
@@ -91,6 +91,7 @@ if __name__ == '__main__':
     parser.add_argument("-t", "--travel_model", type=str, help="source of skims data. e.g. beam, polaris")
     parser.add_argument("-ts", "--table_save", action="store_true", help="store all other generated tables")
     parser.add_argument("-rm", "--random_matching", action="store_true", help="random matching in marriage")
+    parser.add_argument("-sn", "--scenario_name", type=str, help="name of scenario of simulation")
 
     args = parser.parse_args()
     region_code = args.region_code
@@ -109,13 +110,14 @@ if __name__ == '__main__':
     table_save = args.table_save if args.table_save else False
     random_match = args.random_matching if args.random_matching else False
     skim_source = args.travel_model if args.travel_model else 'beam'
+    scenario_name = args.scenario_name if args.scenario_name else False
     output_fname = args.output_fname if args.output_fname \
         else "data/model_data_{0}.h5".format(forecast_year)
 
     run(
         region_code, initial_run, base_year, forecast_year, random_seed,
         calibrated, calibrated_folder, multi_level, segmented, capacity_boost,
-        all_local, freq_interval, output_fname, skim_source, random_match, table_save)
+        all_local, freq_interval, output_fname, skim_source, random_match, table_save, scenario_name)
 
     # make sure output data has same permissions as input (only an
     # issue when running from inside docker which will execute this
