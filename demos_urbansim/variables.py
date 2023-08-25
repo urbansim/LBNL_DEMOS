@@ -1815,7 +1815,7 @@ def tour_sov_operating_cost(travel_data, cost_per_mile, avg_parking_cost):
     return (s).apply(np.log1p)
 
 
-@orca.column('travel_data', cache=True)
+@orca.column('travel_data', cache=False)
 def tour_bus_in_vehicle_time(travel_data, asim_skims):
 
     ods = travel_data.to_frame(columns = ['']).reset_index()
@@ -1844,7 +1844,7 @@ def tour_bus_fare(travel_data, asim_skims):
 
     return (value_outbound + value_inbound).apply(np.log1p).replace(0, 20.0)
 
-@orca.column('travel_data', cache=True)
+@orca.column('travel_data', cache=False)
 def tour_train_in_vehicle_time(travel_data, asim_skims):
 
     ods = travel_data.to_frame(columns = ['']).reset_index()
@@ -2144,7 +2144,7 @@ def mode_choice_template(region_code, calibrated_folder):
     # output_file = f"configs/mode_choice/mode_choice_logsum.yaml"
     return read_yaml_file(calibrated_path)
 
-@orca.column('travel_data', cache = 'iteration')
+@orca.column('travel_data', cache = False)
 def logsum(mode_choice_template, travel_data):
 
     # Read Mode Choice Specs
