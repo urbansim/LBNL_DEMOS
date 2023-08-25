@@ -1,14 +1,16 @@
-import os
-import yaml
 import glob
+import os
+from itertools import product
+
+import numpy as np
+import openmatrix as omx
 import orca
 import pandas as pd
-import numpy as np
+import yaml
 from google.cloud import storage
-from urbansim_templates.data import LoadTable
 from urbansim_templates import modelmanager as mm
-from urbansim_templates.models import OLSRegressionStep
-from urbansim_templates.models import LargeMultinomialLogitStep
+from urbansim_templates.data import LoadTable
+from urbansim_templates.models import LargeMultinomialLogitStep, OLSRegressionStep
 
 print("importing datasources")
 
@@ -113,6 +115,14 @@ observed_marrital_data_name = "outputs/calibration/%s/marrital_status_over_time_
 observed_marrital_data = pd.read_csv(observed_marrital_data_name)
 orca.add_table("observed_marrital_data", observed_marrital_data)
 
+observed_entering_workforce_data_name = "outputs/calibration/%s/entering_workforce_obs.csv" % region_code
+observed_entering_workforce_data = pd.read_csv(observed_entering_workforce_data_name)
+orca.add_table("observed_entering_workforce", observed_entering_workforce_data)
+
+observed_exiting_workforce_data_name = "outputs/calibration/%s/exiting_workforce_obs.csv" % region_code
+observed_exiting_workforce_data = pd.read_csv(observed_exiting_workforce_data_name)
+orca.add_table("observed_exiting_workforce", observed_exiting_workforce_data)
+
 # observed_enrollment_data_name = "outputs/calibration/%s/enrollment_over_time_obs.csv" % region_code
 # observed_enrollment_data = pd.read_csv(observed_enrollment_data_name)
 # orca.add_table("observed_enrollment_data", observed_enrollment_data)
@@ -159,7 +169,17 @@ hdf_tables = [
     "household_validation_acs",
     "unit_validation",
     "job_validation",
+    "school_locations",
+    "work_locations"
+    
 ]
+mlcm_tables = {"school_locations": ["person_id", "school_id"],
+    "work_locations": ["person_id", "work_block_id"]}
+
+for t, c in mlcm_tables.items():
+    data = pd.DataFrame(columns=c)
+    orca.add_table(t, data)
+
 
 store = pd.HDFStore(hdf_path)
 if "/metadata" in store.keys():
@@ -188,6 +208,44 @@ if "metadata" not in orca.list_tables():
     store = pd.HDFStore(hdf_path)
     store["metadata"] = metadata
     store.close()
+
+persons = orca.get_table("persons").local
+# breakpoint()
+print(persons.columns)
+persons["work_block_id"] = "-1"
+persons["workplace_taz"] = "-1"
+persons["school_id"] = "-1"
+persons["school_block_id"] = "-1"
+persons["school_taz"] = "-1"
+
+orca.add_table("persons", persons)
+
+# breakpoint()
+
+# Getting income distribution
+
+persons = orca.get_table("persons").local
+# Define the intervals for age and education
+age_intervals = [0, 20, 30, 40, 50, 65, 900]
+education_intervals = [0, 18, 22, 200]
+
+# Define the labels for age and education groups
+age_labels = ['lte20', '21-29', '30-39', '40-49', '50-64', 'gte65']
+education_labels = ['lte17', '18-21', 'gte22']
+# Create age and education groups with labels
+persons['age_group'] = pd.cut(persons['age'], bins=age_intervals, labels=age_labels, include_lowest=True).astype(str)
+persons['education_group'] = pd.cut(persons['edu'], bins=education_intervals, labels=education_labels, include_lowest=True).astype(str)
+
+# Group by age and education groups and calculate mean and std deviation of earning
+income_dist = persons[persons["worker"]==1].groupby(['age_group', 'education_group']).agg(
+    data_mean = ('earning', 'mean'),
+    data_std = ('earning', 'std')).reset_index()
+
+# Convert to the parameters of the underlying normal distribution
+income_dist["mu"] = np.log(income_dist["data_mean"]**2 / np.sqrt(income_dist["data_std"]**2 + income_dist["data_mean"]**2))
+income_dist["sigma"] = np.sqrt(np.log(1 + income_dist["data_std"]**2 / income_dist["data_mean"]**2))
+
+orca.add_table("income_dist", income_dist)
 
 # -----------------------------------------------------------------------------------------
 # DOWNLOADS CUSTOM SETTINGS IF AVAILABLE
@@ -405,6 +463,56 @@ except Exception:
         ect = ect.append(df)
 orca.add_table("ect", ect.set_index("year"))
 
+
+# -----------------------------------------------------------------------------------------
+# ADD ACTIVITYSIM SKIMS DATA
+# -----------------------------------------------------------------------------------------
+skims = omx.open_file('data/skims_mpo_{}.omx'.format(region_code),'r')
+orca.add_injectable('asim_skims', skims)
+
+# Mode Choice Constants (Consider moving them to .yaml file)
+# Here as a place holder for now
+orca.add_injectable('cost_per_mile', 18.0) # 18 cents per miles
+orca.add_injectable('walkThresh', 2.0) #2 miles
+orca.add_injectable('walkSpeed', 3.0) #3 miles per hour
+orca.add_injectable('bikeThresh', 6.0) #2 miles
+orca.add_injectable('bikeSpeed', 12.00) #3 miles per hour
+orca.add_injectable('ivt_cost_multiplier', 0.6)
+orca.add_injectable('costShareSr2', 1.75)
+orca.add_injectable('costShareSr3', 2.50)
+orca.add_injectable('short_i_wait_multiplier', 2.0)
+orca.add_injectable('waitThresh', 10.00)
+orca.add_injectable('long_i_wait_multiplier', 1.0 )
+orca.add_injectable('xwait_multiplier', 2.0)
+orca.add_injectable('wacc_multiplier', 2.0)
+orca.add_injectable('wegr_multiplier', 2.0)
+orca.add_injectable('shortWalk', 0.333)
+orca.add_injectable('longWalk', 0.667)
+orca.add_injectable('tnc_baseline', 2.20)
+orca.add_injectable('tnc_cost_minute', 0.24)
+orca.add_injectable('tnc_cost_mile', 1.33)
+orca.add_injectable('tnc_min_fare', 7.20)
+orca.add_injectable('avg_parking_cost', 2.50)
+orca.add_injectable('transit_change', 1)
+
+
+def add_missing_combinations(df):
+    # Get the unique values from each index level
+    index_values = [df.index.get_level_values(level).unique() for level in range(df.index.nlevels)]
+
+    # Generate all possible pair combinations
+    index_pairs = list(product(*index_values))
+
+    # Reindex the DataFrame with all possible combinations
+    new_df = df.reindex(index=index_pairs)
+
+    return new_df
+
+@orca.step('update_travel_data')
+def update_travel_data(travel_data):
+    t = travel_data.local
+    t = add_missing_combinations(t)
+    orca.add_table('travel_data', t)
 # -----------------------------------------------------------------------------------------
 # ADD DEMOS TABLES
 # -----------------------------------------------------------------------------------------
@@ -439,17 +547,48 @@ demos_tables = [
     "hhmovein_over_time",
     "student_population",
     "marrital",
+    "exiting_workforce",
+    "entering_workforce",
+    "school_locations",
+    "work_locations"
 ]
 
 for table in demos_tables:
     orca.add_table(table, pd.DataFrame())
 
 
-orca.add_injectable("max_p_id", orca.get_table("persons").local.index.max())
-orca.add_injectable("max_hh_id", orca.get_table("households").local.index.max())
+# orca.add_injectable("max_p_id", orca.get_table("persons").local.index.max())
+# orca.add_injectable("max_hh_id", orca.get_table("households").local.index.max())
 
 orca.add_injectable("persons_local_cols", orca.get_table("persons").local.columns)
 orca.add_injectable("households_local_cols", orca.get_table("households").local.columns)
+
+geoid_to_zone = pd.read_csv("data/geoid_to_zone.csv", dtype={"GEOID": str, "zone_id": str})
+geoid_to_zone["GEOID10"] = geoid_to_zone["GEOID"].copy()
+
+blocks_districts = pd.read_csv("data/blocks_school_districts_2010.csv")
+blocks_districts["UNIFIED_DISTRICT"] = np.where(blocks_districts["SCHOOL_DIST_TYPE"]=="UNIFIED", 1, 0)
+blocks_districts["GEOID10"] = ["0"+str(x) for x in blocks_districts["GEOID10_BLOCK"]]
+blocks_districts["GEOID10_SD"] = ["0"+str(x) for x in blocks_districts["GEOID10_SD"]]
+blocks_districts["DISTRICT_LEVEL"] = blocks_districts.apply(lambda row: (row['GEOID10_SD'], row['DET_DIST_TYPE']), axis=1)
+blocks_districts = blocks_districts.merge(geoid_to_zone, how="left", on=["GEOID10"])
+blocks_districts = blocks_districts.rename(columns={"zone_id": "school_taz"})
+blocks_districts["school_block_id"] = blocks_districts["GEOID10"].copy()
+
+orca.add_table("blocks_districts", blocks_districts)
+orca.add_table("geoid_to_zone", geoid_to_zone)
+
+
+schools_df = pd.read_csv("data/schools_2010.csv", dtype={"GEOID10": str, "SCHOOL_ID": str})
+schools_df['CAP_TOTAL_INC'] = schools_df['CAP_TOTAL'] * 1.2
+schools_df['REM_CAP'] = schools_df['CAP_TOTAL_INC']
+schools_df["GEOID10"] = ["0"+str(x) for x in schools_df["GEOID10"]]
+schools_df["GEOID10_SD"] = ["0"+str(x) for x in schools_df["NCESDist"]]
+schools_df["school_id"] = schools_df["SCHOOL_ID"].copy()
+schools_df = schools_df[~(schools_df["school_id"]=="0000000")].copy()
+
+orca.add_table("schools", schools_df)
+
 # -----------------------------------------------------------------------------------------
 # ADD OUTPUT FOLDER
 # -----------------------------------------------------------------------------------------
