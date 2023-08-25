@@ -1,12 +1,136 @@
+import os
+from collections import OrderedDict
 
-import orca
 import numpy as np
+import openmatrix as omx
+import orca
 import pandas as pd
+import yaml
 from urbansim.utils import misc
 
+import mode_choice
 
 print('importing variables for region', orca.get_injectable('region_code'))
 
+
+# -----------------------------------------------------------------------------------------
+# WORK LOCATION CHOICE VARIABLES
+# -----------------------------------------------------------------------------------------
+@orca.column('zones')
+def mean_income(households):
+    h = households.to_frame(columns = ['income', 'home_taz'])
+    h = h.groupby('home_taz')['income'].mean()
+    return h.fillna(0)
+
+@orca.column('zones')
+def pct_hh_inc_under_25k(households):
+    h = households.to_frame(columns = ['home_taz', 'hh_inc_under_25k'])
+    h = h.groupby('home_taz')['hh_inc_under_25k'].mean()
+    return h.fillna(0)
+
+@orca.column('zones')
+def pct_hh_inc_25_to_75k(households):
+    h = households.to_frame(columns = ['home_taz', 'hh_inc_25_to_75k'])
+    h = h.groupby('home_taz')['hh_inc_25_to_75k'].mean()
+    return h.fillna(0)
+
+@orca.column('zones')
+def pct_hh_inc_75_to_200k(households):
+    h = households.to_frame(columns = ['home_taz', 'hh_inc_75_to_200k'])
+    h = h.groupby('home_taz')['hh_inc_75_to_200k'].mean()
+    return h.fillna(0)
+
+@orca.column('zones')
+def pct_no_higher_ed(persons):
+    p = persons.to_frame(columns = ['home_taz', 'no_higher_ed'])
+    p = p.groupby('home_taz')['no_higher_ed'].mean()
+    return p.fillna(0)
+
+@orca.column('zones')
+def pct_sector_tech(jobs):
+    j = jobs.to_frame(columns = ['taz', 'sector_tech'])
+    j = j.groupby('taz')['sector_tech'].mean()
+    return j.fillna(0)
+
+@orca.column('zones')
+def pct_sector_retail(jobs):
+    j = jobs.to_frame(columns = ['taz', 'sector_retail'])
+    j = j.groupby('taz')['sector_retail'].mean()
+    return j.fillna(0)
+
+@orca.column('zones', cache = True)
+def pct_sector_healthcare(jobs):
+    j = jobs.to_frame(columns = ['taz', 'sector_healthcare'])
+    j = j.groupby('taz')['sector_healthcare'].mean()
+    return j.fillna(0)
+
+@orca.column('households')
+def hh_inc_under_25k(households):
+    i = households.income
+    return i.between(-np.inf, 25000).astype(int)
+
+@orca.column('households')
+def hh_inc_25_to_75k(households):
+    i = households.income
+    return i.between(25000, 75000).astype(int)
+
+@orca.column('households')
+def hh_inc_75_to_200k(households):
+    i = households.income
+    return i.between(75000, 200000).astype(int)
+
+@orca.column('persons')
+def no_higher_ed(persons):
+    education = persons.edu
+    return education.between(-np.inf, 17).astype(int)
+
+@orca.column('jobs')
+def sector_retail(jobs):
+    return jobs.sector_id.isin(['44-45']).astype(int)
+
+@orca.column('jobs')
+def sector_healthcare(jobs):
+    return jobs.sector_id.isin(['62']).astype(int)
+
+@orca.column('jobs')
+def sector_tech(jobs):
+    return jobs.sector_id.isin(['51', '54']).astype(int)
+
+@orca.column('zones')
+def jobs_capacity(jobs):
+    capacity = jobs.taz.value_counts()
+#     capacity.index = capacity.index.astype(int)
+    return capacity
+
+@orca.column('persons')
+def taz_pct_no_higher_ed(persons, zones):
+    return misc.reindex(zones.pct_no_higher_ed, persons.home_taz)
+
+@orca.column('persons')
+def taz_pct_hh_inc_under_25k(persons, zones):
+    return misc.reindex(zones.pct_hh_inc_under_25k, persons.home_taz)
+
+@orca.column('blocks')
+def pct_sector_tech(jobs):
+    j = jobs.to_frame(columns = ['block_id', 'sector_tech'])
+    return j.groupby('block_id').agg({'sector_tech': 'mean'}).fillna(0)
+
+@orca.column('blocks')
+def pct_sector_retail(jobs):
+    j = jobs.to_frame(columns = ['block_id', 'sector_retail'])
+    return j.groupby('block_id').agg({'sector_retail': 'mean'}).fillna(0)
+
+@orca.column('travel_data')
+def dist_0_5(travel_data):
+    return travel_data.tour_dist.clip(0,5)
+
+@orca.column('travel_data')
+def dist_5_15(travel_data):
+    return (travel_data.tour_dist - 5).clip(0,10)
+
+@orca.column('travel_data')
+def dist_15plus(travel_data):
+    return (travel_data.tour_dist -  15).clip(0)
 # -----------------------------------------------------------------------------------------
 # DEMOGRAPHIC VARIABLES
 # -----------------------------------------------------------------------------------------
@@ -30,6 +154,31 @@ def intercept(persons):
 # def kids_move(persons):
 #     size = persons.to_frame(columns=["age"]).shape[0]
 #     return np.zeros(size) - 99
+
+@orca.column('persons')
+def agebin1_labor(persons):
+    p = persons.to_frame(columns=['age'])['age']
+    return p.between(20, 30, inclusive='both') * 1
+
+@orca.column('persons')
+def agebin2_labor(persons):
+    p = persons.to_frame(columns=['age'])['age']
+    return p.between(31, 40, inclusive='both') * 1
+
+@orca.column('persons')
+def agebin3_labor(persons):
+    p = persons.to_frame(columns=['age'])['age']
+    return p.between(41, 50, inclusive='both') * 1
+
+@orca.column('persons')
+def agebin4_labor(persons):
+    p = persons.to_frame(columns=['age'])['age']
+    return p.between(51, 70, inclusive='both') * 1
+
+@orca.column('persons')
+def agebin5_labor(persons):
+    p = persons.to_frame(columns=['age'])['age']
+    return (p>70) * 1
 
 @orca.column('persons')
 def agebin1(persons):
@@ -378,12 +527,12 @@ def married_before(persons):
 
 @orca.column('persons', cache=True)
 def mandatory_work_zone_id(persons):
-    return persons.work_zone_id.where(persons.age > 17, "-1")
+    return persons.work_zone_id.where(persons.age > 17, "-1").astype(str)
 
 
 @orca.column('persons', cache=True)
 def mandatory_school_zone_id(persons):
-    return persons.school_zone_id.where(persons.age > 17, "-1")
+    return persons.school_zone_id.where(persons.age > 17, "-1").astype(str)
 
 
 @orca.column('persons', cache=True)
@@ -1616,6 +1765,440 @@ def mean_home_rent(blocks, block_groups, counties):
         counties = counties.local.join(block_groups.groupby('county_id').median_rent_13_acs.mean())
         return counties.median_rent_13_acs
 
+# -----------------------------------------------------------------------------------------
+# TRAVEL DATA VARIABLES
+# -----------------------------------------------------------------------------------------
+####################
+### HELPER FUNCS ###
+####################
+def skims_lookup(matrix, origin, destination):
+
+    assert origin.shape == destination.shape
+
+    # Convert zone to int for skim look up
+    o = origin.astype(int) - 1
+    d = destination.astype(int) - 1
+
+    s = pd.Series(data = matrix[o, d],
+                  index = [o + 1,d + 1])
+
+    # Convert zone to str for data type consistency
+    s.index = s.index.set_levels([s.index.levels[0].astype(str),
+                                  s.index.levels[1].astype(str)])
+
+    return s
+
+def read_yaml_file(file_path):
+    with open(file_path, 'r') as f:
+        data = yaml.safe_load(f)
+    return data
+
+
+@orca.column('travel_data', cache=True)
+def ASC():
+    return 1
+
+@orca.column('travel_data', cache=True)
+def tour_sov_in_vehicle_time(travel_data, asim_skims):
+    ods = travel_data.to_frame(columns = ['']).reset_index()
+
+    ['from_zone_id', 'to_zone_id']
+
+    #Outbound
+    outbound = np.array(asim_skims['SOV_TIME__AM'])
+    value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
+
+    #Inbound
+    inbound = np.array(asim_skims['SOV_TIME__PM'])
+    value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
+
+    return (value_outbound + value_inbound).apply(np.log1p)
+
+@orca.column('travel_data', cache=True)
+def tour_dist(travel_data, asim_skims):
+
+    ods = travel_data.to_frame(columns = ['']).reset_index()
+
+    #Outbound
+    outbound = np.array(asim_skims['DIST'])
+    value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
+
+    #Inbound
+    inbound = np.array(asim_skims['DIST'])
+    value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
+
+    return (value_outbound + value_inbound)
+
+
+@orca.column('travel_data')
+def tour_sov_operating_cost(travel_data, cost_per_mile, avg_parking_cost):
+
+    s = travel_data.tour_dist * cost_per_mile + avg_parking_cost * 100 # PK CST dollars to cents
+
+    return (s).apply(np.log1p)
+
+
+@orca.column('travel_data', cache=True)
+def tour_bus_in_vehicle_time(travel_data, asim_skims, transit_change):
+
+    ods = travel_data.to_frame(columns = ['']).reset_index()
+
+    #Outbound
+    outbound = (np.array(asim_skims['WLK_LOC_WLK_TOTIVT__AM'])/100) * transit_change
+    value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
+
+    #Inbound
+    inbound = (np.array(asim_skims['WLK_LOC_WLK_TOTIVT__PM'])/100) * transit_change
+    value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
+
+    return (value_outbound + value_inbound).apply(np.log1p).replace(0, 20.0) #Replace high high time to make transit very unactrative
+
+@orca.column('travel_data', cache=True)
+def tour_bus_fare(travel_data, asim_skims):
+    ods = travel_data.to_frame(columns = ['']).reset_index()
+
+    #Outbound
+    outbound = np.array(asim_skims['WLK_LOC_WLK_FAR__AM'])
+    value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
+
+    #Inbound
+    inbound = np.array(asim_skims['WLK_LOC_WLK_FAR__PM'])
+    value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
+
+    return (value_outbound + value_inbound).apply(np.log1p).replace(0, 20.0)
+
+@orca.column('travel_data', cache=True)
+def tour_train_in_vehicle_time(travel_data, asim_skims, transit_change):
+
+    ods = travel_data.to_frame(columns = ['']).reset_index()
+
+    #Outbound
+    outbound = (np.array(asim_skims['WLK_HVY_WLK_TOTIVT__AM'])/100) * transit_change
+    value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
+
+    #Inbound
+    inbound = (np.array(asim_skims['WLK_HVY_WLK_TOTIVT__PM'])/100) * transit_change
+    value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
+
+    return (value_outbound + value_inbound).apply(np.log1p).replace(0, 20.0) #Replace high high time to make transit very unactrative
+
+@orca.column('travel_data', cache=True)
+def tour_train_fare(travel_data, asim_skims):
+    ods = travel_data.to_frame(columns = ['']).reset_index()
+
+    #Outbound
+    outbound = np.array(asim_skims['WLK_HVY_WLK_FAR__AM'])
+    value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
+
+    #Inbound
+    inbound = np.array(asim_skims['WLK_HVY_WLK_FAR__PM'])
+    value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
+
+    return (value_outbound + value_inbound).apply(np.log1p).replace(0, 20.0)
+
+@orca.column('travel_data', cache=True)
+def walk_time_up_to_2_miles(travel_data, asim_skims, walkThresh, walkSpeed):
+    ods = travel_data.to_frame(columns = ['']).reset_index()
+
+    #Outbound
+    outbound = np.array(asim_skims['DISTWALK'])
+    value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id).clip(upper = walkThresh)
+
+    #Inbound
+    inbound = np.array(asim_skims['DISTWALK'])
+    value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id).clip(upper = walkThresh)
+
+    return ((value_outbound + value_inbound) * 60/walkSpeed).apply(np.log1p)
+
+@orca.column('travel_data', cache=True)
+def walk_time_beyond_2_of_a_miles(travel_data, asim_skims, walkThresh, walkSpeed):
+
+    ods = travel_data.to_frame(columns = ['']).reset_index()
+
+    #Outbound
+    outbound = np.array(asim_skims['DISTWALK'])
+    value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
+    value_outbound = (value_outbound -  walkThresh).clip(lower = 0)
+
+    #Inbound
+    inbound = np.array(asim_skims['DISTWALK'])
+    value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
+    value_inbound = (value_inbound - walkThresh).clip(lower = 0)
+
+    return ((value_outbound + value_inbound) * 60/walkSpeed).apply(np.log1p)
+
+@orca.column('travel_data', cache=True)
+def bike_time_up_to_6_miles(travel_data, asim_skims, bikeThresh, bikeSpeed):
+    ods = travel_data.to_frame(columns = ['']).reset_index()
+
+    #Outbound
+    outbound = np.array(asim_skims['DISTBIKE'])
+    value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id).clip(upper = bikeThresh)
+
+    #Inbound
+    inbound = np.array(asim_skims['DISTBIKE'])
+    value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id).clip(upper = bikeThresh)
+
+    return ((value_outbound + value_inbound) * 60/bikeSpeed).apply(np.log1p)
+
+@orca.column('travel_data', cache=True)
+def bike_time_beyond_6_of_a_miles(travel_data, asim_skims, bikeThresh, bikeSpeed):
+    ods = travel_data.to_frame(columns = ['']).reset_index()
+
+    #Outbound
+    outbound = np.array(asim_skims['DISTBIKE'])
+    value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
+    value_outbound = (value_outbound -  bikeThresh).clip(lower = 0)
+
+    #Inbound
+    inbound = np.array(asim_skims['DISTBIKE'])
+    value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id).clip(upper = 2)
+    value_inbound = (value_inbound - bikeThresh).clip(lower = 0)
+
+    return ((value_outbound + value_inbound) * 60/bikeSpeed).apply(np.log1p)
+
+@orca.column('travel_data', cache=True)
+def outbound_dist(travel_data, asim_skims):
+
+    ods = travel_data.to_frame(columns = ['']).reset_index()
+
+    #Outbound
+    outbound = np.array(asim_skims['DIST'])
+    value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
+
+    return value_outbound
+
+@orca.column('travel_data', cache=True)
+def inbound_dist(travel_data, asim_skims):
+
+    ods = travel_data.to_frame(columns = ['']).reset_index()
+
+    #Inbound
+    inbound = np.array(asim_skims['DIST'])
+    value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
+
+    return value_inbound
+
+@orca.column('travel_data', cache=True)
+def tour_tnc_cost(travel_data, asim_skims, tnc_baseline, tnc_cost_minute, tnc_cost_mile, tnc_min_fare):
+    ods = travel_data.to_frame(columns = ['outbound_dist', 'inbound_dist']).reset_index()
+
+    #Outbound
+    outbound = np.array(asim_skims['SOV_TIME__AM'])
+    time_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
+    dist_outbound = ods.set_index(['from_zone_id', 'to_zone_id']).outbound_dist
+    cost_outbound = tnc_baseline + tnc_cost_minute*time_outbound + tnc_cost_mile*dist_outbound
+    cost_outbound = cost_outbound.where(cost_outbound >= tnc_min_fare, tnc_min_fare) * 100 #from dollars to cents
+
+    #Inbound
+    inbound = np.array(asim_skims['SOV_TIME__AM'])
+    time_inbound = skims_lookup(inbound, ods.from_zone_id, ods.to_zone_id)
+    dist_inbound = ods.set_index(['from_zone_id', 'to_zone_id']).inbound_dist
+    cost_inbound = tnc_baseline + tnc_cost_minute*time_inbound + tnc_cost_mile*dist_inbound
+    cost_inbound = cost_inbound.where(cost_inbound >= tnc_min_fare, tnc_min_fare) * 100 #from dollars to cents
+
+    return (cost_outbound + cost_inbound).apply(np.log1p)
+
+@orca.column('travel_data', cache=True)
+def tour_tnc_wait_time(travel_data, asim_skims):
+    ods = travel_data.to_frame(columns = ['']).reset_index()
+
+    #Outbound
+    outbound = np.array(asim_skims['RH_SOLO_WAIT__AM'])
+    value_outbound = skims_lookup(outbound, ods.from_zone_id, ods.to_zone_id)
+
+    #Inbound
+    inbound = np.array(asim_skims['RH_SOLO_WAIT__PM'])
+    value_inbound = skims_lookup(inbound, ods.to_zone_id, ods.from_zone_id)
+
+    return (value_outbound + value_inbound).apply(np.log1p)
+
+@orca.column('travel_data', cache=True)
+def dest_cbd(travel_data, zones):
+    ods = travel_data.to_frame(columns = ['']).reset_index()
+    df = zones.to_frame(columns = ['cbd'])
+
+    s = ods.merge(df, how = 'left', left_on = 'to_zone_id', right_index = True)
+    s = s.set_index(['from_zone_id', 'to_zone_id'])
+    return s
+
+@orca.column('travel_data', cache = True)
+def dest_employment_density(travel_data, zones):
+    ods = travel_data.to_frame(columns = ['']).reset_index()
+    df = zones.to_frame(columns = ['employment_density'])
+
+    s = ods.merge(df, how = 'left', left_on = 'to_zone_id', right_index = True)
+    s = s.set_index(['from_zone_id', 'to_zone_id'])
+    return s.apply(np.log1p)
+
+########################
+## AUXILIARY COLUMNS ##
+########################
+
+@orca.column('households', cache=True)
+def home_taz(households, blocks):
+    return misc.reindex(blocks['taz_zone_id'], households['block_id']).astype(str)
+
+@orca.column('jobs', cache=True)
+def taz(jobs, blocks):
+    return misc.reindex(blocks['taz_zone_id'], jobs['block_id']).astype(str)
+
+@orca.column('zones', cache=True)
+def totpop(households):
+    s = households.to_frame(columns = ['home_taz', 'persons'])
+    return s.groupby('home_taz')['persons'].sum().fillna(0)
+
+@orca.column('zones', cache=True)
+def totemp(jobs):
+    s = jobs.to_frame(columns = ['taz', 'block_id'])
+    return s.groupby('taz').size().fillna(0)
+
+@orca.column('zones', cache=True)
+def totacre(blocks):
+    s = blocks.to_frame(columns = ['taz_zone_id','sum_acres'])
+    return s.groupby('taz_zone_id')['sum_acres'].sum().fillna(0)
+
+@orca.column('zones', cache=True)
+def density(zones):
+    df = zones.to_frame(columns = ['totpop','totemp','totacre'])
+    return (df['totpop'] + 2.5 * df['totemp'])/df['totacre']
+
+@orca.column('zones', cache=True)
+def area_type(zones):
+    # Integer, 0=regional core, 1=central business district,
+    # 2=urban business, 3=urban, 4=suburban, 5=rural
+    area_types = pd.cut(
+        zones['density'],
+        [0, 6, 30, 55, 100, 300, float("inf")],
+        labels=['5', '4', '3', '2', '1', '0'],
+        include_lowest=True).astype(str)
+    return area_types
+
+@orca.column('zones', cache=True)
+def cbd(zones):
+    return zones.area_type.isin(['0', '1']).astype(int)
+
+
+@orca.column('zones')
+def employment_density(zones):
+    return zones.totemp / zones.totacre
+# @orca.column('zones', cache=True)
+# def county_id(zones):
+#
+#     #FIX ME: Consider generalizing this for other regions
+#
+#     county_map = {'Alameda': '06001',
+#                   'Contra Costa': '06013',
+#                   'Marin': '06041',
+#                   'Napa': '06055',
+#                   'San Francisco': '06075' ,
+#                   'San Mateo':'06081',
+#                   'Santa Clara':'06085',
+#                   'Solano': '06095',
+#                   'Sonoma':'06097'}
+#
+#     return zones.county.replace(county_map).astype(str)
+
+# @orca.column('travel_data', cache=True)
+# def county_id(travel_data, zones):
+#     td = travel_data.local.reset_index()
+#
+#     series = misc.reindex(zones['county_id'], td['from_zone_id'].astype(str))
+#     series.name = 'county_id'
+#
+#     df = pd.DataFrame(data = series)
+#     df['from_zone_id'] = td['from_zone_id'].astype(int)
+#     df['to_zone_id'] = td['to_zone_id'].astype(int)
+#     df = df.set_index(['from_zone_id','to_zone_id'])
+#
+#     return df.county_id
+
+# @orca.column('travel_data', cache=True)
+# def county_cat(travel_data):
+#     s = travel_data.county_id
+#     return pd.Series(pd.factorize(s)[0], index = s.index)
+
+@orca.column('persons', cache=True)
+def home_taz(households, persons):
+    return misc.reindex(households.home_taz, persons.household_id)
+
+@orca.column('job_flows', cache=True)
+def from_zone_id(job_flows, blocks):
+    return misc.reindex( blocks.taz_zone_id, job_flows.home_block_id)
+
+@orca.column('job_flows', cache=True)
+def to_zone_id(job_flows, blocks):
+    return misc.reindex( blocks.taz_zone_id, job_flows.work_block_id)
+
+# @orca.column('travel_data', cache=True)
+# def job_flows(travel_data, job_flows):
+#
+#     # Job flows by TAZ
+#     jf = job_flows.to_frame(columns = ['from_zone_id', 'to_zone_id','job_flows'])
+#     jf = jf.groupby(['from_zone_id', 'to_zone_id']).agg({'job_flows':'sum'}).reset_index()
+#
+#     # Load all possible OD pairs
+#     td = travel_data.local.reset_index().astype(str)
+#
+#     # Merge flows with OD pairs, fill with zero if OD flow is NaN
+#     flows = td.merge(jf, how = 'left', on = ['from_zone_id','to_zone_id']).fillna(0)
+#     flows[['from_zone_id','to_zone_id']] = flows[['from_zone_id','to_zone_id']].astype(int)
+#     return flows.set_index(['from_zone_id','to_zone_id'])['job_flows']
+
+# @orca.injectable()
+# def county_cat_map(travel_data, cache=True):
+#     s = travel_data.to_frame(columns = ['county_id']).county_id
+#     dict_ = {}
+#     for i, value in enumerate(pd.factorize(s)[1]):
+#         dict_[value] = i
+#     return dict_
+
+@orca.injectable()
+def mode_choice_template(region_code, calibrated_folder):
+    # region_code = orca.get_injectable("region_code")
+    # calibrated_folder = orca.get_injectable("calibrated_folder")
+    calibrated_path = os.path.join(
+        'configs',
+        'calibrated_configs/',
+        calibrated_folder,
+        region_code,
+        'mode_choice',
+        'mode_choice_logsum.yaml')
+    # output_file = f"configs/mode_choice/mode_choice_logsum.yaml"
+    return read_yaml_file(calibrated_path)
+
+@orca.column('travel_data', cache = 'iteration')
+def logsum(mode_choice_template, travel_data):
+
+    # Read Mode Choice Specs
+    coeffs = mode_choice_template['saved_object']['fitted_parameters']
+    specs = OrderedDict(mode_choice_template['saved_object']['model_expression'])
+    nest = mode_choice_template['saved_object']['nest']
+
+    # Get list of explanatory Variables
+    exp_vars = list(set([key for values in specs.values() for key in values.keys()]))
+
+    # Read Data from Orca
+    t = travel_data.to_frame(columns = exp_vars)
+
+    # Organize Data in Dictionary - (mode, data)
+    x = {mode: np.array([t[key] for key in spec.keys()]) for mode, spec in specs.items()}
+
+    # Iterate over the list of dictionaries and convert list values to NumPy arrays
+    # (for alternative indexing)
+    for d in nest['alternatives']:
+        for key, value in d.items():
+            if isinstance(value, list):
+                d[key] = np.array(value).astype(int)
+
+
+    logsums_ = mode_choice.mode_choice_logsums(params = coeffs,
+                             specs = specs,
+                             exp_vars = x,
+                             nest = nest)
+
+
+    return pd.Series(logsums_, index = t.index)
 
 # -----------------------------------------------------------------------------------------
 # DERIVED VARIABLES
