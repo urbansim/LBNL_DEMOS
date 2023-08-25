@@ -1996,7 +1996,7 @@ def update_married_households_random(persons, households, marriage_list):
     )
     new_hh["tenure_mover"] = "-1"
     new_hh["block_id"] = "-1"
-    new_hh["hh_type"] = -1
+    new_hh["hh_type"] = "-1"
     household_df = pd.concat([household_df, new_hh])
 
     # p_df.update(relevant["household_id"])
@@ -2444,7 +2444,7 @@ def update_married_households(persons, households, marriage_list):
     )
     new_hh["tenure_mover"] = "-1"
     new_hh["block_id"] = "-1"
-    new_hh["hh_type"] = -1
+    new_hh["hh_type"] = "-1"
     household_df = pd.concat([household_df, new_hh])
 
     # p_df.update(relevant["household_id"])
