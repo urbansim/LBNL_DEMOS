@@ -152,6 +152,20 @@ def remove_temp_variables():
 # -----------------------------------------------------------------------------------------
 
 
+@orca.step("income_stats")
+def income_stats(persons, households):
+    """Function to print the number of households from both the households and pers
+
+    Args:
+        persons (DataFrame): Pandas DataFrame of the persons table
+        households (DataFrame): Pandas DataFrame of the households table
+    """
+
+    persons_df = orca.get_table("persons").local
+    households_df = orca.get_table("households").local
+    print("Households median Income: ", households_df["income"].median())
+    print("Households median income persons table: ", persons_df.groupby("household_id")["earning"].sum().median())
+
 @orca.step("household_stats")
 def household_stats(persons, households):
     """Function to print the number of households from both the households and pers
@@ -4232,6 +4246,7 @@ if orca.get_injectable("running_calibration_routine") == False:
             + employment_models
             # + update_income
             + end_of_year_models
+            + ["income_stats"]
             # + ["generate_metrics"]
             + mlcm_postprocessing
             + export_demo_steps
