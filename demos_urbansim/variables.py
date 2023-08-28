@@ -1,14 +1,13 @@
 import os
 from collections import OrderedDict
 
+import mode_choice
 import numpy as np
 import openmatrix as omx
 import orca
 import pandas as pd
 import yaml
 from urbansim.utils import misc
-
-import mode_choice
 
 print('importing variables for region', orca.get_injectable('region_code'))
 
