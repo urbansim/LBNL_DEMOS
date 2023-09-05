@@ -18,4 +18,4 @@ stopwatch.py
 openmatrix
 
 git+https://git@github.com/UDST/choicemodels.git@lotto_choice_empty_alts
-git+https://git@github.com/UDST/urbansim_templates.git@dev
+git+https://git@github.com/UDST/urbansim_templates.git@intx_term_update
