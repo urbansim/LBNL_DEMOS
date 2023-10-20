@@ -56,7 +56,6 @@ saved_object:
   out_alternatives: null
   out_chooser_filters:
     - worker == 1
-    - work_at_home == 0
   out_choosers: persons
   out_column: work_block_id
   summary_table: "                  CHOICEMODELS ESTIMATION RESULTS            \

@@ -38,14 +38,36 @@ def work_location(persons):
     # This workaorund is necesary to make the work
     # location choice run in batches, with improves
     # simulation efficiency.
-
+    # breakpoint()
+    # At this breakpoint, look at the persons who have no work locations
+    persons_df_debug = orca.get_table("persons").local
+    num_workers = persons_df_debug[(persons_df_debug["worker"]==1)].shape[0]
+    num_workers_no_loc = persons_df_debug[(persons_df_debug["worker"]==1) & (persons_df_debug["work_block_id"]=="-1")].shape[0]
+    print("Share of workers with no work loc before wlcm:", num_workers_no_loc/num_workers)
     model = mm.get_step('wlcm')
-    model.run(chooser_batch_size = 500000)
-
+    model.run(chooser_batch_size = 100000)
+    # breakpoint()
     # work_block_id = persons['work_block_id']
     persons_work = orca.get_table("persons").to_frame(columns=["work_block_id"])
     persons_work = persons_work.reset_index()
+    persons_df_debug = orca.get_table("persons").local
+    num_workers = persons_df_debug[(persons_df_debug["worker"]==1)].shape[0]
+    num_workers_no_loc = persons_df_debug[(persons_df_debug["worker"]==1) & (persons_df_debug["work_block_id"]=="-1")].shape[0]
+    print("Share of workers with no work loc after wlcm:", num_workers_no_loc/num_workers)
+    # breakpoint()
+    # At this breakpoint, see what changes, if any?
     orca.add_table('work_locations', persons_work.fillna('-1'))
+
+@orca.step("work_location_stats")
+def work_location_stats(persons):
+    persons_work = orca.get_table("persons").to_frame(columns=["work_block_id"])
+    persons_work = persons_work.reset_index()
+    persons_df_debug = orca.get_table("persons").local
+    num_workers = persons_df_debug[(persons_df_debug["worker"]==1)].shape[0]
+    num_workers_no_loc = persons_df_debug[(persons_df_debug["worker"]==1) & (persons_df_debug["work_block_id"]=="-1")].shape[0]
+    num_people_no_loc = persons_df_debug[(persons_df_debug["work_block_id"]=="-1")].shape[0]
+    print("Share of workers with no work loc:", num_workers_no_loc/num_workers)
+    print("Share of people with no work loc:", num_people_no_loc/persons_work.shape[0])
 
 @orca.step("status_report")
 def status_report(year):
@@ -918,6 +940,8 @@ def update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year
     persons_df["worker"] = np.where(persons_df["exit_workforce"]==1, 0, persons_df["worker"])
     persons_df["worker"] = np.where(persons_df["remain_unemployed"]==0, 1, persons_df["worker"])
 
+    persons_df["work_at_home"] = persons_df["work_at_home"].fillna(0)
+
     persons_df.loc[persons_df["exit_workforce"]==1, "earning"] = 0
     persons_df["earning"] = np.where(persons_df["remain_unemployed"]==0, persons_df["new_earning"], persons_df["earning"])
 
@@ -1125,15 +1149,24 @@ def update_birth(persons, households, birth_list):
     babies["MAR"] = 5
     babies["sex"] = np.random.choice([1, 2])
     babies["student"] = 0
-    babies["work_at_home"] = 0
-    babies["worker"] = 0
+
     babies["person_age"] = "19 and under"
     babies["person_sex"] = babies["sex"].map({1: "male", 2: "female"})
     babies["child"] = 1
     babies["senior"] = 0
     babies["dead"] = -99
     babies["person"] = 1
-
+    babies["work_at_home"] = 0
+    babies["worker"] = 0
+    babies["work_block_id"] = "-1"
+    babies["work_zone_id"] = "-1"
+    babies["workplace_taz"] = "-1"
+    babies["school_block_id"] = "-1"
+    babies["school_id"] = "-1"
+    babies["school_taz"] = "-1"
+    babies["school_zone_id"] = "-1"
+    babies["education_group"] = "lte17"
+    babies["age_group"] = "lte20"
     household_races = (
         persons_df.groupby("household_id")
         .agg(num_races=("race_id", "nunique"))
@@ -1566,35 +1599,39 @@ def create_results_table(students_df, assigned_students_list, year):
 
 @orca.step("mlcm_postprocessing")
 def mlcm_postprocessing(persons):
+    # breakpoint()
     # SCHOOL
     persons_df = orca.get_table("persons").local
     persons_df = persons_df.reset_index()
-    schools_df = orca.get_table("schools").to_frame()
-    school_assignment_df = orca.get_table("school_locations").to_frame()
+    # schools_df = orca.get_table("schools").to_frame()
+    # school_assignment_df = orca.get_table("school_locations").to_frame()
+
     geoid_to_zone = orca.get_table("geoid_to_zone").to_frame()
-    geoid_to_zone["school_taz"] = geoid_to_zone["zone_id"].copy()
+    geoid_to_zone["work_block_id"] = geoid_to_zone["GEOID10"].copy()
+    # geoid_to_zone["school_taz"] = geoid_to_zone["zone_id"].copy()
     geoid_to_zone["workplace_taz"] = geoid_to_zone["zone_id"].copy()
 
-    schools_df = schools_df.drop_duplicates(subset=["school_id"], keep="first")
-    school_assignment_df = school_assignment_df.merge(schools_df[["school_id", "GEOID10"]], on=["school_id"], how='left')
-    school_assignment_df["GEOID10"] = school_assignment_df["GEOID10"].fillna("-1")
-    school_assignment_df["school_block_id"] = school_assignment_df["GEOID10"].copy().fillna("-1")
-    school_assignment_df = school_assignment_df.merge(geoid_to_zone[["GEOID10", "school_taz"]], on=["GEOID10"], how='left')
+    # schools_df = schools_df.drop_duplicates(subset=["school_id"], keep="first")
+    # school_assignment_df = school_assignment_df.merge(schools_df[["school_id", "GEOID10"]], on=["school_id"], how='left')
+    # school_assignment_df["GEOID10"] = school_assignment_df["GEOID10"].fillna("-1")
+    # school_assignment_df["school_block_id"] = school_assignment_df["GEOID10"].copy().fillna("-1")
+    # school_assignment_df = school_assignment_df.merge(geoid_to_zone[["GEOID10", "school_taz"]], on=["GEOID10"], how='left')
     
-    persons_df = persons_df.merge(school_assignment_df[["person_id", "school_id", "school_block_id", "school_taz"]], on=["person_id"], suffixes=('', '_replace'), how="left")
-    persons_df["school_taz"] = persons_df["school_taz_replace"].copy().fillna("-1")
-    persons_df["school_id"] = persons_df["school_id_replace"].copy().fillna("-1")
-    persons_df["school_block_id"] = persons_df["school_block_id_replace"].copy().fillna("-1")
+    # # breakpoint()    
+    # persons_df = persons_df.merge(school_assignment_df[["person_id", "school_id", "school_block_id", "school_taz"]], on=["person_id"], suffixes=('', '_replace'), how="left")
+    # persons_df["school_taz"] = persons_df["school_taz_replace"].copy().fillna("-1")
+    # persons_df["school_id"] = persons_df["school_id_replace"].copy().fillna("-1")
+    # persons_df["school_block_id"] = persons_df["school_block_id_replace"].copy().fillna("-1")
 
     # WORK POSTPROCESSING
-    work_locations = orca.get_table('work_locations').to_frame()
-    work_locations["GEOID10"] = work_locations["work_block_id"].copy().astype("str")
-    work_locations = work_locations.merge(geoid_to_zone[["GEOID10", "workplace_taz"]], on=["GEOID10"], how='left')
-    work_locations["workplace_taz"] = work_locations["workplace_taz"].copy().fillna("-1")
+    # work_locations = orca.get_table('work_locations').to_frame()
+    # work_locations["GEOID10"] = work_locations["work_block_id"].copy().astype("str")
+    # work_locations = work_locations.merge(geoid_to_zone[["GEOID10", "workplace_taz"]], on=["GEOID10"], how='left')
+    # work_locations["workplace_taz"] = work_locations["workplace_taz"].copy().fillna("-1")
 
-    persons_df = persons_df.merge(work_locations[["person_id", "work_block_id", "workplace_taz"]], on=["person_id"], suffixes=('', '_replace'), how="left")
+    persons_df = persons_df.merge(geoid_to_zone[["work_block_id", "workplace_taz"]], on=["work_block_id"], suffixes=('', '_replace'), how="left")
     persons_df["workplace_taz"] = persons_df["workplace_taz_replace"].copy().fillna("-1")
-    persons_df["work_block_id"] = persons_df["work_block_id_replace"].copy().fillna("-1")
+    persons_df["work_zone_id"] = persons_df["workplace_taz"].copy()
     persons_df = persons_df.set_index("person_id")
 
     persons_cols = orca.get_injectable("persons_local_cols")
@@ -1611,6 +1648,7 @@ def school_location(persons, households, year):
     households_df = orca.get_table("households").local
     households_df = households_df.reset_index()
     # breakpoint()
+    # At this breakpoint, figure out how many students don't have school locations
     households_districts = households_df[["household_id", "block_id"]].merge(blocks_districts, left_on="block_id", right_on="GEOID10")
     students_df = students_df.merge(households_districts.reset_index(), on="household_id")
     students_df = students_df[students_df["STUDENT_SCHOOL_LEVEL"]==students_df["DET_DIST_TYPE"]].copy()
@@ -1621,6 +1659,8 @@ def school_location(persons, households, year):
                                             schools_df)
 
     school_assignment_df = create_results_table(students_df, assigned_students_list, year)
+    # breakpoint()
+    # At this breakpoint, figure out how many still don't have an assignment
     orca.add_table("school_locations", school_assignment_df[["person_id", "school_id"]])
 
 @orca.step("kids_moving_model")
@@ -3346,6 +3386,8 @@ def print_marr_stats():
 
 @orca.step('household_transition')
 def household_transition(households, persons, year, metadata):
+    # breakpoint()
+    # at this breakpoint, look at the persons table
     linked_tables = {'persons': (persons, 'household_id')}
     if ('annual_household_control_totals' in orca.list_tables()) and ('use_database_control_totals' not in orca.list_injectables()):
         control_totals = orca.get_table('annual_household_control_totals').to_frame()
@@ -3591,6 +3633,7 @@ def full_transition(
             updated.set_index("household_id", inplace=True, drop=True)
             persons_local_columns = orca.get_injectable("persons_local_cols")
             # breakpoint()
+            # At this breakpoint, figure out what changes from the previous one.
             orca.add_table("persons", sampled_persons.loc[:,persons_local_columns])
         # if added.min() < max_hh_id:
         #     # breakpoint()
@@ -4239,16 +4282,20 @@ if orca.get_injectable("running_calibration_routine") == False:
             start_of_year_models
             + demo_models
             + work_models
-            + school_models
+            # + school_models
+            + ["work_location_stats"]
             + price_models
+            + ["work_location_stats"]
             + developer_models
+            + ["work_location_stats"]
             + household_models
+            + ["work_location_stats"]
             + employment_models
-            # + update_income
+            + ["work_location_stats"]
             + end_of_year_models
             + ["income_stats"]
-            # + ["generate_metrics"]
             + mlcm_postprocessing
+            + ["work_location_stats"]
             + export_demo_steps
         )
     else:
