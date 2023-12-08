@@ -4281,7 +4281,7 @@ if orca.get_injectable("running_calibration_routine") == False:
         steps_all_years = (
             start_of_year_models
             + demo_models
-            # + work_models
+            + work_models
             # + school_models
             # + ["work_location_stats"]
             + price_models
