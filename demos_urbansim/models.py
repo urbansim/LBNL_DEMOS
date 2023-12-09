@@ -4283,7 +4283,7 @@ if orca.get_injectable("running_calibration_routine") == False:
             + demo_models
             + work_models
             # + school_models
-            # + ["work_location_stats"]
+            + ["work_location_stats"]
             + price_models
             + ["work_location_stats"]
             + developer_models
