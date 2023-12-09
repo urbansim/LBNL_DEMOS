@@ -3829,16 +3829,16 @@ def update_linked_table(tbl, col_name, added, copied, removed):
 
 @orca.step('households_relocation_basic')
 def households_relocation_basic(households):
-    return simple_relocation(households, .005, "block_id")
+    return simple_relocation(households, .034, "block_id")
 
 
 def simple_relocation(choosers, relocation_rate, fieldname):
     print("Total agents: %d" % len(choosers))
-    print("Total currently unplaced: %d" % choosers[fieldname].value_counts().get(-1, 0))
+    print("Total currently unplaced: %d" % choosers[fieldname].value_counts().get("-1", 0))
     print("Assigning for relocation...")
     chooser_ids = np.random.choice(choosers.index, size=int(relocation_rate * len(choosers)), replace=False)
     choosers.update_col_from_series(fieldname, pd.Series('-1', index=chooser_ids))
-    print("Total currently unplaced: %d" % choosers[fieldname].value_counts().get(-1, 0))
+    print("Total currently unplaced: %d" % choosers[fieldname].value_counts().get("-1", 0))
 
 # -----------------------------------------------------------------------------------------
 # POSTPROCESSING
@@ -4163,7 +4163,7 @@ if orca.get_injectable("running_calibration_routine") == False:
                 elcm_models += ["elcm_pf"]
 
         developer_models = ["supply_transition"] + rdplcm_models
-        household_models = ["household_transition"] + hlcm_models + ["households_relocation_basic"] 
+        household_models = ["household_transition"] + ["households_relocation_basic"] + hlcm_models
         employment_models = ["job_transition"] + elcm_models
         location_models = rdplcm_models + hlcm_models + elcm_models
         calibrated_folder = orca.get_injectable("calibrated_folder")
@@ -4228,9 +4228,9 @@ if orca.get_injectable("running_calibration_routine") == False:
         developer_models = ["supply_transition"] + [
             "rdplcm" + str(segment) for segment in range(0, 4)
         ]
-        household_models = ["household_transition"] + ["household_stats"], [
+        household_models = ["household_transition"] + ["households_relocation_basic"] + ["household_stats"], [
             "hlcm" + str(segment) for segment in range(1, 11)
-        ] + ["households_relocation_basic"]
+        ]
         employment_models = ["job_transition"] + [
             "elcm" + str(segment) for segment in range(0, 6)
         ]
