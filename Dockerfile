@@ -14,4 +14,4 @@ RUN apt-get update && \
 RUN pip install -r requirements.txt
 
 WORKDIR /base/demos_urbansim
-ENTRYPOINT ["python", "-u", "simulate.py", "-c", "-cf", "custom", "-l", "-sg"]
+ENTRYPOINT ["python", "-u", "simulate.py", "-c", "-cf", "custom", "-l"]
