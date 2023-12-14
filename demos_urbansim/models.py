@@ -3829,7 +3829,7 @@ def update_linked_table(tbl, col_name, added, copied, removed):
 
 @orca.step('households_relocation_basic')
 def households_relocation_basic(households):
-    return simple_relocation(households, .034, "block_id")
+    return simple_relocation(households, .005, "block_id")
 
 
 def simple_relocation(choosers, relocation_rate, fieldname):
