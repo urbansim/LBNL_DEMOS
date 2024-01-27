@@ -43,12 +43,10 @@ def work_location(persons):
     # This workaorund is necesary to make the work
     # location choice run in batches, with improves
     # simulation efficiency.
-    persons_df_debug = orca.get_table("persons").local
-    num_workers = persons_df_debug[(persons_df_debug["worker"]==1)].shape[0]
-    num_workers_no_loc = persons_df_debug[(persons_df_debug["worker"]==1) & (persons_df_debug["work_block_id"]=="-1")].shape[0]
-    print("Share of workers with no work loc before wlcm:", num_workers_no_loc/num_workers)
     model = mm.get_step('wlcm')
     model.run(chooser_batch_size = 100000)
+    
+    # Update work locations table of individuals #TODO: evaluate whether to keep or remove
     persons_work = orca.get_table("persons").to_frame(columns=["work_block_id"])
     persons_work = persons_work.reset_index()
     orca.add_table('work_locations', persons_work.fillna('-1'))
@@ -61,14 +59,27 @@ def work_location_stats(persons):
     Args:
         persons (Orca table): persons orca table
     """
-    persons_work = orca.get_table("persons").to_frame(columns=["work_block_id"])
-    persons_work = persons_work.reset_index()
-    persons_df_debug = orca.get_table("persons").local
-    num_workers = persons_df_debug[(persons_df_debug["worker"]==1)].shape[0]
-    num_workers_no_loc = persons_df_debug[(persons_df_debug["worker"]==1) & (persons_df_debug["work_block_id"]=="-1")].shape[0]
-    num_people_no_loc = persons_df_debug[(persons_df_debug["work_block_id"]=="-1")].shape[0]
-    print("Share of workers with no work loc:", num_workers_no_loc/num_workers)
-    print("Share of people with no work loc:", num_people_no_loc/persons_work.shape[0])
+    # Load the 'persons' table into a DataFrame
+    persons_df = orca.get_table("persons").to_frame(columns=["work_block_id", "worker"])
+
+    # Count total number of persons and workers
+    total_persons = len(persons_df)
+    total_workers = len(persons_df[persons_df["worker"] == 1])
+
+    # Count workers and people with no work location
+    workers_no_location = len(persons_df[(persons_df["worker"] == 1) &
+                                        (persons_df["work_block_id"] == "-1")])
+    people_no_location = len(persons_df[persons_df["work_block_id"] == "-1"])
+
+    # Calculate and print the shares
+    share_workers_no_location = (workers_no_location / total_workers
+                                if total_workers else 0)
+    share_people_no_location = (people_no_location / total_persons
+                                if total_persons else 0)
+
+    print("Share of workers with no work location:", share_workers_no_location)
+    print("Share of people with no work location:", share_people_no_location)
+
 
 @orca.step("status_report")
 def status_report(year):
