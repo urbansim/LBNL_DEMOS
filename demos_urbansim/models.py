@@ -211,44 +211,38 @@ def fatality_model(persons, households, year):
         persons (DataFrameWrapper): DataFrameWrapper of persons table
         households (DataFrameWrapper): DataFrameWrapper of households table
     """
+    # Retrieve and update 'persons' table
     persons_df = orca.get_table("persons").local
     persons_df["dead"] = -99
     orca.add_table("persons", persons_df)
-    # print("Persons shape: ", persons_df.shape[0])
-    # Running fatality Model
+
+    # Retrieve and calibrate the mortality model
     mortality = mm.get_step("mortality")
-    # mortality.run()
-    # fatality_list = mortality.choices.astype(int)
-    # print(fatality_list.sum(), " fatalities")
-
-    observed_fatalities = orca.get_table("observed_fatalities_data").to_frame()
-    target_count = observed_fatalities[observed_fatalities["year"]==year]["count"]
-
+    observed_fatalities_df = orca.get_table("observed_fatalities_data").to_frame()
+    target_count = observed_fatalities_df[observed_fatalities_df["year"] == year]["count"].iloc[0]
     fatality_list = calibrate_model(mortality, target_count)
 
-    
-    # print("Fatality list count: ", fatality_list.value_counts())
-    print(fatality_list.sum(), "predicted fatalities")
-    print(target_count, " observed fatalities")
-    # print("Fatality list shape: ", fatality_list.shape)
-    # Updating the households and persons tables
-    households = orca.get_table("households")
-    persons = orca.get_table("persons")
-    remove_dead_persons(persons, households, fatality_list, year)
+    # Print predicted and observed fatalities
+    predicted_fatalities = fatality_list.sum()
+    print(f"{predicted_fatalities} predicted fatalities")
+    print(f"{target_count} observed fatalities")
 
-    # Update mortalities table
-    mortalities = orca.get_table("mortalities").to_frame()
-    if mortalities.empty:
-        mortalities = pd.DataFrame(
-            data={"year": [year], "count": [fatality_list.sum()]}
-        )
-    else:
-        mortalities_new = pd.DataFrame(
-            data={"year": [year], "count": [fatality_list.sum()]}
-        )
+    # Update households and persons tables
+    remove_dead_persons(
+        orca.get_table("persons"), 
+        orca.get_table("households"), 
+        fatality_list, 
+        year
+    )
 
-        mortalities = pd.concat([mortalities, mortalities_new], ignore_index=True) 
-    orca.add_table("mortalities", mortalities)
+    # Update or create the mortalities table
+    mortalities_df = orca.get_table("mortalities").to_frame()
+    mortalities_new_row = pd.DataFrame(
+        {"year": [year], "count": [predicted_fatalities]}
+    )
+    mortalities_df = (pd.concat([mortalities_df, mortalities_new_row], ignore_index=True) 
+                    if not mortalities_df.empty else mortalities_new_row)
+    orca.add_table("mortalities", mortalities_df)
 
 @orca.step("update_income")
 def update_income(persons, households, year):
@@ -4218,16 +4212,11 @@ if orca.get_injectable("running_calibration_routine") == False:
             # + school_models
             # + ["work_location_stats"]
             + price_models
-            + ["work_location_stats"]
             + developer_models
-            + ["work_location_stats"]
             + household_models
-            + ["work_location_stats"]
             + employment_models
-            + ["work_location_stats"]
             + end_of_year_models
             + mlcm_postprocessing
-            + ["work_location_stats"]
             + export_demo_steps
         )
     else:
