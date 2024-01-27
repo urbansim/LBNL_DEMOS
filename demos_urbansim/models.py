@@ -302,6 +302,12 @@ def update_income(persons, households, year):
     orca.add_table("households", households_df[households_local_cols])
     orca.add_table("persons", persons_df[persons_local_cols])
 
+def identify_dead_households(persons_df):
+    persons_df["member"] = 1
+    dead_fraction = persons_df.groupby("household_id").agg(
+        num_dead=("dead", "sum"), size=("member", "sum")
+    )
+    return dead_fraction[dead_fraction["num_dead"] == dead_fraction["size"]].index.to_list()
 
 # Mortality model returns a list of 0s representing alive and 1 representing dead
 # Then adds that list to the persons table and updates persons and households tables accordingly
@@ -327,21 +333,9 @@ def remove_dead_persons(persons, households, fatality_list, year):
     persons_df["dead"] = fatality_list
     graveyard = persons_df[persons_df["dead"] == 1].copy()
 
-    #################################
-    # HOUSEHOLD WHERE EVERYONE DIES #
-    #################################
-    # Get households where everyone died
-    persons_df["member"] = 1
-
-    dead_frac = persons_df.groupby("household_id").agg(
-        num_dead=("dead", "sum"), size=("member", "sum")
-    )
-    dead_households = dead_frac[
-        dead_frac["num_dead"] == dead_frac["size"]
-    ].index.to_list()
-
+    # HOUSEHOLD WHERE EVERYONE DIES
+    dead_households = identify_dead_households(persons_df)
     grave_persons = persons_df[persons_df["household_id"].isin(dead_households)].copy()
-
     # Drop out of the persons table
     persons_df = persons_df.loc[~persons_df["household_id"].isin(dead_households)]
     # Drop out of the households table
@@ -350,9 +344,7 @@ def remove_dead_persons(persons, households, fatality_list, year):
     ##################################################
     ##### HOUSEHOLDS WHERE PART OF HOUSEHOLD DIES ####
     ##################################################
-    dead = persons_df[persons_df["dead"] == 1].copy()
-    alive = persons_df[persons_df["dead"] == 0].copy()
-    # print("Finished splitting dead and alive")
+    dead, alive = persons_df[persons_df["dead"] == 1].copy(), persons_df[persons_df["dead"] == 0].copy()
 
     #################################
     # Alive heads, Dead partners
@@ -387,18 +379,11 @@ def remove_dead_persons(persons, households, fatality_list, year):
     #alive = widows.combine_first(alive)
     alive["MAR"] = alive["MAR"].astype(int)
 
-    # if alive_copy.index.has_duplicates:
-    #     breakpoint()
-    
-    # if alive.index.has_duplicates:
-    #     breakpoint()
-    # print("Finished updating marital status")
 
     # Select the households in alive where the heads died
     alive_sort = alive[alive["household_id"].isin(dead_heads["household_id"])].copy()
     alive_sort["relate"] = alive_sort["relate"].astype(int)
 
-    # breakpoint()
     if len(alive_sort.index) > 0:
         alive_sort.sort_values("relate", inplace=True)
         # Restructure all the households where the head died
@@ -3301,29 +3286,37 @@ def households_reorg(persons, households, year):
 
 @orca.step("print_household_stats")
 def print_household_stats():
-    """Function to print the number of households from both the households and pers
-
-    Args:
-        persons (DataFrame): Pandas DataFrame of the persons table
-        households (DataFrame): Pandas DataFrame of the households table
     """
-    print("Households size from persons table: ", orca.get_table("persons").local["household_id"].unique().shape[0])
-    print("Households size from households table: ", orca.get_table("households").local.index.unique().shape[0])
-    print("Persons Size: ", orca.get_table("persons").local.index.unique().shape[0])
-    print("Missing hh:", len(set(orca.get_table("persons").local["household_id"].unique()) -\
-        set(orca.get_table("households").local.index.unique())))
-    persons_df = orca.get_table("persons").local
-    persons_df["relate_0"] = np.where(persons_df["relate"]==0, 1, 0)
-    persons_df["relate_1"] = np.where(persons_df["relate"]==1, 1, 0)
-    persons_df["relate_13"] = np.where(persons_df["relate"]==13, 1, 0)
-    persons_df_sum = persons_df.groupby("household_id").agg(relate_1 = ("relate_1", sum), relate_13 = ("relate_13", sum),
-    relate_0 = ("relate_0", sum))
-    print("Households with multiple 0:", ((persons_df_sum["relate_0"])>1).sum())
-    print("Households with multiple 1:", ((persons_df_sum["relate_1"])>1).sum())
-    print("Households with multiple 13:", ((persons_df_sum["relate_13"])>1).sum())
-    print("Households with 1 and 13:", ((persons_df_sum["relate_1"] * persons_df_sum["relate_13"])>0).sum())
+    Function to print the number of households from both the households and persons tables.
+    """
+    persons_table = orca.get_table("persons").local
+    households_table = orca.get_table("households").local
 
+    # Printing households size from different tables
+    print("Households size from persons table:", persons_table["household_id"].nunique())
+    print("Households size from households table:", households_table.index.nunique())
+    print("Persons Size:", persons_table.index.nunique())
 
+    # Missing households
+    missing_households = set(persons_table["household_id"].unique()) - set(households_table.index.unique())
+    print("Missing hh:", len(missing_households))
+
+    # Calculating relationships
+    persons_table["relate_0"] = np.where(persons_table["relate"] == 0, 1, 0)
+    persons_table["relate_1"] = np.where(persons_table["relate"] == 1, 1, 0)
+    persons_table["relate_13"] = np.where(persons_table["relate"] == 13, 1, 0)
+    
+    persons_df_sum = persons_table.groupby("household_id").agg(
+        relate_1=("relate_1", "sum"),
+        relate_13=("relate_13", "sum"),
+        relate_0=("relate_0", "sum")
+    )
+
+    # Printing statistics about households
+    print("Households with multiple 0:", (persons_df_sum["relate_0"] > 1).sum())
+    print("Households with multiple 1:", (persons_df_sum["relate_1"] > 1).sum())
+    print("Households with multiple 13:", (persons_df_sum["relate_13"] > 1).sum())
+    print("Households with 1 and 13:", ((persons_df_sum["relate_1"] * persons_df_sum["relate_13"]) > 0).sum())
 
 @orca.step("print_marr_stats")
 def print_marr_stats():
