@@ -180,26 +180,49 @@ def household_stats(persons, households):
         persons (DataFrame): Pandas DataFrame of the persons table
         households (DataFrame): Pandas DataFrame of the households table
     """
-    print("Households size from persons table: ", orca.get_table("persons").local["household_id"].unique().shape[0])
-    print("Households size from households table: ", orca.get_table("households").local.index.unique().shape[0])
-    print("Households in households table not in persons table:", len(sorted(set(orca.get_table("households").local.index.unique()) - set(orca.get_table("persons").local["household_id"].unique()))))
-    print("Households in persons table not in households table:", len(sorted(set(orca.get_table("persons").local["household_id"].unique()) - set(orca.get_table("households").local.index.unique()))))
-    print("Households with NA persons:", orca.get_table("households").local["persons"].isna().sum())
-    print("Duplicated households: ", orca.get_table("households").local.index.has_duplicates)
-    # print("Counties: ", households["lcm_county_id"].unique())
-    print("Persons Size: ", orca.get_table("persons").local.index.unique().shape[0])
-    print("Duplicated persons: ", orca.get_table("persons").local.index.has_duplicates)
+    # Retrieve data from tables
+    persons_table = orca.get_table("persons").local
+    households_table = orca.get_table("households").local
 
-    persons_df = orca.get_table("persons").local
-    persons_df["relate_0"] = np.where(persons_df["relate"]==0, 1, 0)
-    persons_df["relate_1"] = np.where(persons_df["relate"]==1, 1, 0)
-    persons_df["relate_13"] = np.where(persons_df["relate"]==13, 1, 0)
-    persons_df_sum = persons_df.groupby("household_id").agg(relate_1 = ("relate_1", sum), relate_13 = ("relate_13", sum),
-    relate_0 = ("relate_0", sum))
-    print("Households with multiple 0: ", ((persons_df_sum["relate_0"])>1).sum())
-    print("Households with multiple 1: ", ((persons_df_sum["relate_1"])>1).sum())
-    print("Households with multiple 13: ", ((persons_df_sum["relate_13"])>1).sum())
-    print("Households with 1 and 13: ", ((persons_df_sum["relate_1"] * persons_df_sum["relate_13"])>0).sum())
+    # Unique household IDs from persons table
+    unique_households_persons = persons_table["household_id"].unique()
+    # Unique household IDs from households table
+    unique_households_households = households_table.index.unique()
+
+    # Print statements
+    print(f"Households size from persons table: {unique_households_persons.shape[0]}")
+    print(f"Households size from households table: {unique_households_households.shape[0]}")
+
+    # Households in one table but not the other
+    households_diff_ph = set(unique_households_persons) - set(unique_households_households)
+    households_diff_hp = set(unique_households_households) - set(unique_households_persons)
+    print(f"Households in households table not in persons table: {len(households_diff_ph)}")
+    print(f"Households in persons table not in households table: {len(households_diff_hp)}")
+
+    # Households with NA persons
+    print(f"Households with NA persons: {households_table['persons'].isna().sum()}")
+
+    # Duplicated households and persons
+    print(f"Duplicated households: {households_table.index.has_duplicates}")
+    print(f"Duplicated persons: {persons_table.index.has_duplicates}")
+
+    # Adding new columns to persons_df based on conditions
+    persons_table["relate_0"] = np.where(persons_table["relate"] == 0, 1, 0)
+    persons_table["relate_1"] = np.where(persons_table["relate"] == 1, 1, 0)
+    persons_table["relate_13"] = np.where(persons_table["relate"] == 13, 1, 0)
+
+    # Grouping and aggregating data
+    persons_df_sum = persons_table.groupby("household_id").agg(
+        relate_1=("relate_1", sum),
+        relate_13=("relate_13", sum),
+        relate_0=("relate_0", sum)
+    )
+
+    # Printing households with multiple relationships
+    print("Households with multiple 0: ", (persons_df_sum["relate_0"] > 1).sum())
+    print("Households with multiple 1: ", (persons_df_sum["relate_1"] > 1).sum())
+    print("Households with multiple 13: ", (persons_df_sum["relate_13"] > 1).sum())
+    print("Households with 1 and 13: ", ((persons_df_sum["relate_1"] * persons_df_sum["relate_13"]) > 0).sum())
 
 @orca.step("fatality_model")
 def fatality_model(persons, households, year):
