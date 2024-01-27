@@ -224,22 +224,15 @@ def fatality_model(persons, households, year):
     # fatality_list = mortality.choices.astype(int)
     # print(fatality_list.sum(), " fatalities")
 
-    mortality.run()
-    fatality_list = mortality.choices.astype(int)
-    predicted_share = fatality_list.sum() / persons_df.shape[0]
     observed_fatalities = orca.get_table("observed_fatalities_data").to_frame()
-    target = observed_fatalities[observed_fatalities["year"]==year]["count"]
-    target_share = target / persons_df.shape[0]
+    target_count = observed_fatalities[observed_fatalities["year"]==year]["count"]
 
-    error = np.sqrt(np.mean((fatality_list.sum() - target)**2))
-    while error >= 1000:
-        mortality.fitted_parameters[0] += np.log(target.sum()/fatality_list.sum())
-        mortality.run()
-        fatality_list = mortality.choices.astype(int)
-        predicted_share = fatality_list.sum() / persons_df.shape[0]
-        error = np.sqrt(np.mean((fatality_list.sum() - target)**2))
+    fatality_list = calibrate_model(mortality, target_count)
+
+    
     # print("Fatality list count: ", fatality_list.value_counts())
-    # print(fatality_list.sum(), " fatalities")
+    print(fatality_list.sum(), "predicted fatalities")
+    print(target_count, " observed fatalities")
     # print("Fatality list shape: ", fatality_list.shape)
     # Updating the households and persons tables
     households = orca.get_table("households")
@@ -800,39 +793,24 @@ def laborforce_model(persons, year):
     persons_df["leaving_workforce"] = -99
     orca.add_table("persons", persons_df)
     persons_df = orca.get_table("persons").local
+    
+    input_pop_size = persons_df[(persons_df["worker"]==0) & (persons_df["age"]>=18)].shape[0]
+
+    observed_stay_unemployed = orca.get_table("observed_entering_workforce").to_frame()
+    target_count = round(observed_stay_unemployed[observed_stay_unemployed["year"]==year]["share"] * input_pop_size)
 
     in_workforce_model = mm.get_step("enter_labor_force")
-    in_workforce_model.run()
-    stay_unemployed_list = in_workforce_model.choices.astype(int)
-    predicted_share = stay_unemployed_list.sum() / stay_unemployed_list.shape[0]
-    observed_stay_unemployed = orca.get_table("observed_entering_workforce").to_frame()
-    target_share = observed_stay_unemployed[observed_stay_unemployed["year"]==year]["share"]
-    target = target_share * stay_unemployed_list.shape[0]
-    error = np.sqrt(np.mean((predicted_share.sum() - target_share)**2))
-    
-    while error >= 0.01:
-        in_workforce_model.fitted_parameters[0] += np.log(target.sum()/stay_unemployed_list.sum())
-        in_workforce_model.run()
-        stay_unemployed_list = in_workforce_model.choices.astype(int)
-        predicted_share = stay_unemployed_list.sum() / stay_unemployed_list.shape[0]
-        error = np.sqrt(np.mean((predicted_share.sum() - target_share)**2))
+    stay_unemployed_list = calibrate_model(in_workforce_model, target_count)
+
     
     out_workforce_model = mm.get_step("exit_labor_force")
-    out_workforce_model.run()
-    exit_workforce_list = out_workforce_model.choices.astype(int)
-    predicted_share = exit_workforce_list.sum() / exit_workforce_list.shape[0]
+    
     observed_exit_workforce = orca.get_table("observed_exiting_workforce").to_frame()
     target_share = observed_exit_workforce[observed_exit_workforce["year"]==year]["share"]
-    target = target_share * exit_workforce_list.shape[0]
+    target_count = (target_share * input_pop_size)
 
-    error = np.sqrt(np.mean((predicted_share.sum() - target_share)**2))
-    while error >= 0.01:
-        out_workforce_model.fitted_parameters[0] += np.log(target.sum()/exit_workforce_list.sum())
-        out_workforce_model.run()
-        exit_workforce_list = out_workforce_model.choices.astype(int)
-        predicted_share = exit_workforce_list.sum() / exit_workforce_list.shape[0]
-        error = np.sqrt(np.mean((predicted_share.sum() - target_share)**2))
-
+    exit_workforce_list = calibrate_model(out_workforce_model, target_count)
+    
     # Update labor status
     update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year)
 
@@ -937,6 +915,21 @@ def update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year
     orca.add_table("households", households_df[households_cols])
 
 
+def calibrate_model(model, target_count, threshold=0.05):
+    model.run()
+    predictions = model.choices.astype(int)
+    predicted_share = predictions.sum() / predictions.shape[0]
+    target_share = target_count / predictions.shape[0]
+
+    error = (predictions.sum() - target_count.sum())/target_count.sum()
+    while np.abs(error) >= threshold:
+        model.fitted_parameters[0] += np.log(target_count.sum()/predictions.sum())
+        model.run()
+        predictions = model.choices.astype(int)
+        predicted_share = predictions.sum() / predictions.shape[0]
+        error = (predictions.sum() - target_count.sum())/target_count.sum()
+    return predictions
+
 @orca.step("birth_model")
 def birth_model(persons, households, year):
     """
@@ -991,22 +984,13 @@ def birth_model(persons, households, year):
     birth.filters = "index in " + list_ids
     birth.out_filters = "index in " + list_ids
 
-    birth.run()
-    birth_list = birth.choices.astype(int)
-    predicted_share = birth_list.sum() / eligible_hh_df.shape[0]
     observed_births = orca.get_table("observed_births_data").to_frame()
-    target = observed_births[observed_births["year"]==year]["count"]
-    target_share = target / eligible_hh_df.shape[0]
+    target_count = observed_births[observed_births["year"]==year]["count"]
+    
+    birth_list = calibrate_model(birth, target_count)
 
-    error = np.sqrt(np.mean((birth_list.sum() - target)**2))
-    # print("here")
-    while error >= 1000:
-        birth.fitted_parameters[0] += np.log(target.sum()/birth_list.sum())
-        birth.run()
-        birth_list = birth.choices.astype(int)
-        predicted_share = birth_list.sum() / eligible_hh_df.shape[0]
-        error = np.sqrt(np.mean((birth_list.sum() - target)**2))
-
+    print(target_count.sum(), " target")
+    print(birth_list.sum(), " predicted")
     # breakpoint()
     # print("Eligible households >45",
     #       persons_df.loc[ELIGIBILITY_COND_2, "household_id"].unique().shape[0])
