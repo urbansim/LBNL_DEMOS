@@ -1222,35 +1222,10 @@ def mlcm_postprocessing(persons):
     """
     persons_df = orca.get_table("persons").local
     persons_df = persons_df.reset_index()
-    # schools_df = orca.get_table("schools").to_frame()
-    # school_assignment_df = orca.get_table("school_locations").to_frame()
 
     geoid_to_zone = orca.get_table("geoid_to_zone").to_frame()
     geoid_to_zone["work_block_id"] = geoid_to_zone["GEOID10"].copy()
-    # geoid_to_zone["school_taz"] = geoid_to_zone["zone_id"].copy()
     geoid_to_zone["workplace_taz"] = geoid_to_zone["zone_id"].copy()
-
-    # schools_df = schools_df.drop_duplicates(subset=["school_id"], keep="first")
-    # school_assignment_df = school_assignment_df.merge(
-    # schools_df[["school_id", "GEOID10"]], on=["school_id"], how='left')
-    # school_assignment_df["GEOID10"] = school_assignment_df["GEOID10"].fillna("-1")
-    # school_assignment_df["school_block_id"] = school_assignment_df["GEOID10"].copy().fillna("-1")
-    # school_assignment_df = school_assignment_df.merge(
-    # geoid_to_zone[["GEOID10", "school_taz"]], on=["GEOID10"], how='left')
-    
-    # persons_df = persons_df.merge(
-    # school_assignment_df[["person_id", "school_id", "school_block_id", "school_taz"]],
-    #  on=["person_id"], suffixes=('', '_replace'), how="left")
-
-    # persons_df["school_taz"] = persons_df["school_taz_replace"].copy().fillna("-1")
-    # persons_df["school_id"] = persons_df["school_id_replace"].copy().fillna("-1")
-    # persons_df["school_block_id"] = persons_df["school_block_id_replace"].copy().fillna("-1")
-
-    # work_locations = orca.get_table('work_locations').to_frame()
-    # work_locations["GEOID10"] = work_locations["work_block_id"].copy().astype("str")
-    # work_locations = work_locations.merge(
-    # geoid_to_zone[["GEOID10", "workplace_taz"]], on=["GEOID10"], how='left')
-    # work_locations["workplace_taz"] = work_locations["workplace_taz"].copy().fillna("-1")
 
     persons_df = persons_df.merge(geoid_to_zone[["work_block_id", "workplace_taz"]], on=["work_block_id"], suffixes=('', '_replace'), how="left")
     persons_df["workplace_taz"] = persons_df["workplace_taz_replace"].copy().fillna("-1")
