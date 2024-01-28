@@ -2467,27 +2467,10 @@ def update_cohabitating_households(persons, households, cohabitate_list):
 
     persons_df = pd.concat([persons_df, leaving_house])
 
-    # print("HH Size from Persons: ", persons_df["household_id"].unique().shape[0])
-    # print("HH Size from Household: ", households_df.index.unique().shape[0])
-    # print("HH in HH_DF not in P_DF:", len(sorted(set(households_df.index.unique()) - set(persons_df["household_id"].unique()))))
-    # print("HH in P_DF not in HH_DF:", len(sorted(set(persons_df["household_id"].unique()) - set(households_df.index.unique()))))
-    # print("HHs with NA persons:", households_df["persons"].isna().sum())
-    # print("HH duplicates: ", households_df.index.has_duplicates)
-    # # print("Counties: ", households["lcm_county_id"].unique())
-    # print("Persons Size: ", persons_df.index.unique().shape[0])
-    # print("Persons Duplicated: ", persons_df.index.has_duplicates)
-
-    # if len(sorted(set(households_df.index.unique()) - set(persons_df["household_id"].unique()))) > 0:
-    #     breakpoint()
-    # if len(sorted(set(persons_df["household_id"].unique()) - set(households_df.index.unique()))) > 0:
-    #     breakpoint()
     
     # add to orca
     orca.add_table("households", households_df[households_local_cols])
     orca.add_table("persons", persons_df[persons_local_cols])
-    # orca.add_injectable(
-    #     "max_hh_id", max(orca.get_injectable("max_hh_id"), households_df.index.max())
-    # )
     metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
     max_p_id = metadata.loc["max_p_id", "value"]
@@ -2528,7 +2511,6 @@ def cohabitation_model(persons, households):
     )
     # Run Model
     # print("Running cohabitation model...")
-    # breakpoint()
     cohabitate_x_list = simulation_mnl(data, cohabitation_coeffs)
     update_cohabitating_households(persons, households, cohabitate_x_list)
 
@@ -3701,16 +3683,16 @@ if orca.get_injectable("running_calibration_routine") == False:
         steps_all_years = (
             start_of_year_models
             + demo_models
-            + work_models
+            # + work_models
             # + school_models
             # + ["work_location_stats"]
-            + price_models
-            + developer_models
-            + household_models
-            + employment_models
-            + end_of_year_models
-            + mlcm_postprocessing
-            + export_demo_steps
+            # + price_models
+            # + developer_models
+            # + household_models
+            # + employment_models
+            # + end_of_year_models
+            # + mlcm_postprocessing
+            # + export_demo_steps
         )
     else:
         start_of_year_models = [
