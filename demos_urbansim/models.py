@@ -713,7 +713,6 @@ def update_education_status(persons, student_list, year):
     orca.get_table("persons").update_col("student", persons_df["student"])
 
 
-
 @orca.step("education_model")
 def education_model(persons, year):
     """
@@ -1585,53 +1584,6 @@ def update_households_after_kids(persons, households, kids_moving):
     orca.add_table("kids_move_table", kids_moving_table)
 
 
-
-@orca.step("marriage_model")
-def marriage_model(persons, households):
-    """Function to run the marriage model, pair individuals, and
-    replace marriage status and households in the persons and households
-    tables.
-
-    Args:
-        persons (DataFrameWrapper): DataFrameWrapper of persons table
-        households (DataFrameWrapper): DataFrameWrapper of households table
-    """
-    household_cols = households.local_columns
-    household_df = households.local
-    persons_cols = persons.local_columns
-    persons_local_cols = persons.local_columns
-
-    marriage_model = orca.get_injectable("marriage_model")
-    marriage_coeffs = pd.DataFrame(marriage_model["model_coeffs"])
-    marriage_variables = pd.DataFrame(marriage_model["spec_names"])
-    model_columns = marriage_variables[0].values.tolist()
-    vars = persons_local_cols + model_columns
-    persons_df = persons.to_frame(columns=vars)
-    # get persons cohabitating and heads of their households
-    COHABS_PERSONS = persons_df["relate"] == 13
-    cohab_persons_df = persons_df.loc[COHABS_PERSONS].copy()
-    COHABS_HOUSEHOLDS = cohab_persons_df["household_id"].unique()
-    COHABS_HEADS = (persons_df["household_id"].isin(COHABS_HOUSEHOLDS)) & (persons_df["relate"] == 0)
-    cohab_heads_df = persons_df.loc[COHABS_HEADS].copy()
-    all_cohabs_df = pd.concat([cohab_heads_df, cohab_persons_df])
-    all_cohabs_df["cohab"] = 1
-    # Get Single People
-    SINGLE_COND = (persons_df["MAR"] != 1) & (persons_df["age"] > 16)
-    single_df = persons_df.loc[SINGLE_COND].copy()
-    data = single_df.join(all_cohabs_df[["cohab"]], how="left")
-    data = data.loc[data["cohab"] != 1].copy()
-    data.drop(columns="cohab", inplace=True)
-    data = data.loc[:, model_columns].copy()
-    ###############################################################
-    # print("Running marriage model...")
-    marriage_list = simulation_mnl(data, marriage_coeffs)
-    random_match = orca.get_injectable("random_match")
-    if random_match==True:
-        update_married_households_random(persons, households, marriage_list)
-    else:
-        update_married_households(persons, households, marriage_list)
-        
-
 def fix_erroneous_households(persons, households):
     print("Fixing erroneous households")
     p_df = persons.local
@@ -2476,40 +2428,6 @@ def update_cohabitating_households(persons, households, cohabitate_list):
         metadata.loc["max_p_id", "value"] = persons_df.index.max()
     orca.add_table("metadata", metadata)
 
-@orca.step("cohabitation_model")
-def cohabitation_model(persons, households):
-    """Function to run the cohabitation to X model.
-    The function runs the model and updates households.
-
-    Args:
-        persons (DataFrameWrapper): DataFrameWrapper of the persons table
-        households (DataFrameWrapper): DataFrameWrapper of the households table
-    """
-    persons_df = persons.local
-    hh_df = households.to_frame(columns=["lcm_county_id"])
-    hh_df.reset_index(inplace=True)
-    hh_local_cols = orca.get_table("households").local_columns
-    
-    cohabitation_model = orca.get_injectable("cohabitation_model")
-    cohabitation_coeffs = pd.DataFrame(cohabitation_model["model_coeffs"])
-    cohabitation_variables = pd.DataFrame(cohabitation_model["spec_names"])
-    model_columns = cohabitation_variables[0].values.tolist()
-    vars = np.unique(np.array(hh_local_cols + model_columns))
-    persons_df = persons.local
-    ELIGIBLE_HOUSEHOLDS = (
-        persons_df[persons_df["relate"] == 13]["household_id"].unique().astype(int)
-    )
-    # households_df = orca.get_table("households").to_frame(columns=model_columns)
-    data = (
-        orca.get_table("households")
-        .to_frame(columns=model_columns)
-        .loc[ELIGIBLE_HOUSEHOLDS, model_columns]
-    )
-    # Run Model
-    # print("Running cohabitation model...")
-    cohabitate_x_list = simulation_mnl(data, cohabitation_coeffs)
-    update_cohabitating_households(persons, households, cohabitate_x_list)
-
 
 def update_divorce(divorce_list):
     """
@@ -2701,7 +2619,6 @@ def update_divorce(divorce_list):
         persons=("person", "sum"),
     )
 
-    # household_agg["lcm_county_id"] = household_agg["lcm_county_id"]
     household_agg["gt55"] = np.where(household_agg["persons_age_gt55"] > 0, 1, 0)
     household_agg["gt2"] = np.where(household_agg["persons"] > 2, 1, 0)
     household_agg["sf_detached"] = "unknown"
@@ -2807,67 +2724,7 @@ def update_divorce(divorce_list):
         new_divorce = pd.DataFrame([divorce_list.sum()], columns=["divorced"])
         divorce_table = pd.concat([divorce_table, new_divorce], ignore_index=True)
     orca.add_table("divorce_table", divorce_table)
-
-@orca.step("household_divorce")
-def household_divorce(persons, households):
-    """
-    Running the household divorce tble
-
-    Args:
-        persons (DataFrameWrapper): DataFrameWrapper of the persons table
-        households (DataFrameWrapper): DataFrameWrapper of the households table
-
-    Returns:
-        None
-    """
-    t0 = time.time()
-    households_df = orca.get_table("households").local
-    households_df["divorced"] = -99
-    orca.add_table("households", households_df)
-    persons_df = orca.get_table("persons").local
-    t1 = time.time()
-    total = t1-t0
-    # print("Pulling data:", total)
-    t0 = time.time()
-    ELIGIBLE_HOUSEHOLDS = list(
-        persons_df[(persons_df["relate"].isin([0, 1])) & (persons_df["MAR"] == 1)][
-            "household_id"
-        ]
-        .unique()
-        .astype(int)
-    )
-    sizes = (
-        persons_df[
-            persons_df["household_id"].isin(ELIGIBLE_HOUSEHOLDS)
-            & (persons_df["relate"].isin([0, 1]))
-        ]
-        .groupby("household_id")
-        .size()
-    )
-    ELIGIBLE_HOUSEHOLDS = sizes[(sizes == 2)].index.to_list()
-    t1 = time.time()
-    total = t1-t0
-    # print("Eligibility time:", total)
-    # print("eligible households are", len(ELIGIBLE_HOUSEHOLDS))
-    t0 = time.time()
-    divorce_model = mm.get_step("divorce")
-    t1 = time.time()
-    total = t1-t0
-    # print("retrieving model:", total)
-    list_ids = str(ELIGIBLE_HOUSEHOLDS)
-    divorce_model.filters = "index in " + list_ids
-    divorce_model.out_filters = "index in " + list_ids
-    divorce_model.run()
-    t1 = time.time()
-    total = t1-t0
-    # print("Running model:", total)
-    t0 = time.time()
-    divorce_list = divorce_model.choices.astype(int)
-    t1 = time.time()
-    total = t1-t0
-    # print("Converting to int:", total)
-    update_divorce(persons, households, divorce_list)
-
+ 
 @orca.step("households_reorg")
 def households_reorg(persons, households, year):
     """Runs the household reorganization models,
@@ -2909,7 +2766,6 @@ def households_reorg(persons, households, year):
     data = data.loc[:, model_columns].copy()
     ###############################################################
     # print("Running marriage model...")
-    # breakpoint()
     marriage_list = simulation_mnl(data, marriage_coeffs)
 
     random_match = orca.get_injectable("random_match")
@@ -2922,10 +2778,7 @@ def households_reorg(persons, households, year):
     persons_df = orca.get_table("persons").local
     ELIGIBLE_HOUSEHOLDS = list(persons_df[(persons_df["relate"].isin([0, 1])) & (persons_df["MAR"] == 1)]["household_id"].unique().astype(int))
     sizes = (persons_df[persons_df["household_id"].isin(ELIGIBLE_HOUSEHOLDS)& (persons_df["relate"].isin([0, 1]))].groupby("household_id").size())
-    # print("Sizes value counts: ", sizes.value_counts())
     ELIGIBLE_HOUSEHOLDS = sizes[(sizes == 2)].index.to_list()
-    # print("Size of Eligible Households: ", len(ELIGIBLE_HOUSEHOLDS))
-    # print("Eligible households for divorce are", len(ELIGIBLE_HOUSEHOLDS))
     divorce_model = mm.get_step("divorce")
     list_ids = str(ELIGIBLE_HOUSEHOLDS)
     divorce_model.filters = "index in " + list_ids
