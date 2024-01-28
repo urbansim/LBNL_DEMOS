@@ -939,10 +939,8 @@ def birth_model(persons, households, year):
             })
         btable_elig_df = pd.concat([btable_elig_df, btable_elig_df_new], ignore_index=True)
     orca.add_table("btable_elig", btable_elig_df)
-    # print("BIRTH ELIGIBILITY POP")
-    # print(btable_elig_df)
+
     # Run model
-    # print("Running the birth model...")
     birth = mm.get_step("birth")
     list_ids = str(eligible_hh_df.index.to_list())
     # print(len(eligible_hh_df.index.to_list()))
@@ -956,14 +954,7 @@ def birth_model(persons, households, year):
 
     print(target_count.sum(), " target")
     print(birth_list.sum(), " predicted")
-    # breakpoint()
-    # print("Eligible households >45",
-    #       persons_df.loc[ELIGIBILITY_COND_2, "household_id"].unique().shape[0])
-    # print("Eligible households <14",
-    #       persons_df.loc[ELIGIBILITY_COND_3, "household_id"].unique().shape[0])
-    # print(eligible_hh_df.shape[0], " eligible households for birth model")
-    # print(birth_list.sum(), " births")
-    # print("Updating persons table with newborns...")
+
     update_birth(persons, households, birth_list)
 
     # print("Updating birth metrics...")
