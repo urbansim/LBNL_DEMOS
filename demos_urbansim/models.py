@@ -2528,7 +2528,6 @@ def update_divorce(divorce_list):
         None
     """
     # print("Updating household stats...")
-    # breakpoint()
     households_local_cols = orca.get_table("households").local.columns
 
     persons_local_cols = orca.get_table("persons").local.columns
@@ -2544,23 +2543,16 @@ def update_divorce(divorce_list):
 
     sizes = persons_df[persons_df["household_id"].isin(divorce_list.index) & (persons_df["relate"].isin([0, 1]))].groupby("household_id").size()
 
-    # print("Sizes not 2: ", sizes[sizes!=2].shape[0])
 
-    # print("divorced households: ", len(DIVORCED_HOUSEHOLDS_ID))
-    # print("")
     persons_divorce = persons_df[
         persons_df["household_id"].isin(divorce_households.index)
     ].copy()
-    # print("divorced persons: ", persons_divorce.shape[0])
-    # print("Min hh size:", persons_divorce.groupby("household_id").size().min())
-    # print("Max hh size:", persons_divorce.groupby("household_id").size().max())
+
 
     divorced_parents = persons_divorce[
         (persons_divorce["relate"].isin([0, 1])) & (persons_divorce["MAR"] == 1)
     ].copy()
 
-    # print("Min parents size:", divorced_parents.groupby("household_id").size().min())
-    # print("Max parents size:", divorced_parents.groupby("household_id").size().max())
     leaving_house = divorced_parents.groupby("household_id").sample(n=1)
 
     staying_house = persons_divorce[~(persons_divorce.index.isin(leaving_house.index))].copy()
@@ -2627,9 +2619,6 @@ def update_divorce(divorce_list):
         staying_household_agg["persons_age_gt55"] > 0, 1, 0
     )
     staying_household_agg["gt2"] = np.where(staying_household_agg["persons"] > 2, 1, 0)
-    # staying_household_agg["sf_detached"] = "unknown"
-    # staying_household_agg["serialno"] = "unknown"
-    # staying_household_agg["cars"] = households_df[households_df.index.isin(staying_house["household_id"].unique())]["cars"]
 
     staying_household_agg["hh_workers"] = np.where(
         staying_household_agg["workers"] == 0,
@@ -2684,12 +2673,6 @@ def update_divorce(divorce_list):
         ),
     )
 
-    # staying_household_agg["hh_type"] = 1
-    # staying_household_agg["household_type"] = 1
-    # staying_household_agg["serialno"] = -1
-    # staying_household_agg["birth"] = -99
-    # staying_household_agg["divorced"] = -99
-    # staying_household_agg.set_index(staying_household_agg["household_id"], inplace=True)
     staying_household_agg.index.name = "household_id"
 
     # initiate new households with individuals leaving house
@@ -2794,34 +2777,22 @@ def update_divorce(divorce_list):
     household_agg["serialno"] = "-1"
     household_agg["birth"] = -99
     household_agg["divorced"] = -99
-    # household_agg.set_index(household_agg["household_id"], inplace=True)
-    # household_agg.index.name = "household_id"
 
     households_df.update(staying_household_agg)
 
-    # print(staying_house["household_id"].unique().shape[0] + leaving_house["household_id"].unique().shape[0])
     hh_ids_p_table = np.hstack((staying_house["household_id"].unique(), leaving_house["household_id"].unique()))
     df_p = persons_df.combine_first(staying_house[persons_local_cols])
     df_p = df_p.combine_first(leaving_house[persons_local_cols])
     hh_ids_hh_table = np.hstack((households_df.index, household_agg.index))
-    # if  df_p["household_id"].unique().shape[0] != np.unique(hh_ids_hh_table).shape[0]:
-    #     breakpoint()
+
     # merge all in one persons and households table
     new_households = pd.concat([households_df[households_local_cols], household_agg[households_local_cols]])
     persons_df.update(staying_house[persons_local_cols])
     persons_df.update(leaving_house[persons_local_cols])
 
-    # persons_df
-    # persons_df.loc[staying_house.index, persons_local_cols] = staying_house.loc[staying_house.index, persons_local_cols].to_numpy()
-    # persons_df.loc[leaving_house.index, persons_local_cols] = leaving_house.loc[leaving_house.index, persons_local_cols].to_numpy()
-
-    # if  persons_df["household_id"].unique().shape[0] != new_households.index.unique().shape[0]:
-    #     breakpoint()
     orca.add_table("households", new_households[households_local_cols])
     orca.add_table("persons", persons_df[persons_local_cols])
-    # orca.add_injectable(
-    #     "max_hh_id", max(orca.get_injectable("max_hh_id"), new_households.index.max())
-    # )
+
     
     metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
