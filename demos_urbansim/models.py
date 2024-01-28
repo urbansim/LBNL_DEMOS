@@ -355,7 +355,6 @@ def remove_dead_persons(persons, households, fatality_list, year):
     alive_heads = alive[alive["relate"] == 0]
     alive_heads = alive_heads[["household_id", "MAR"]]
     widow_heads = alive[(alive["household_id"].isin(dead_partners["household_id"])) & (alive["relate"]==0)].copy()
-    # widow_heads = widow_heads.set_index("person_id")
     widow_heads["MAR"].values[:] = 3
 
     # Dead heads, alive partners
@@ -365,10 +364,7 @@ def remove_dead_persons(persons, households, fatality_list, year):
         ["household_id", "MAR"]
     ]  ## Pull the relate status and update it
     widow_partners = alive[(alive["household_id"].isin(dead_heads["household_id"])) & (alive["relate"].isin([1, 13]))].copy()
-    #alive_partner.reset_index().merge(
-    #    dead_heads[["household_id"]], how="inner", on="household_id"
-    #)
-    #widow_partners = widow_partners.set_index("person_id")
+
     widow_partners["MAR"].values[:] = 3  # THIS MIGHT NEED VERIFICATION, WHAT DOES MAR MEAN?
 
     # Merge the two groups of widows
@@ -376,7 +372,6 @@ def remove_dead_persons(persons, households, fatality_list, year):
     # Update the alive database's MAR values using the widows table
     alive_copy = alive.copy()
     alive.loc[widows.index, "MAR"] = 3
-    #alive = widows.combine_first(alive)
     alive["MAR"] = alive["MAR"].astype(int)
 
 
@@ -395,7 +390,6 @@ def remove_dead_persons(persons, households, fatality_list, year):
         # Update relationship values and make sure correct datatype is used
         alive.loc[alive_sort.index, "relate"] = alive_sort["relate"]
         alive["relate"] = alive["relate"].astype(int)
-        # print("Finished restructuring households")
 
     alive["is_relate_0"] = (alive["relate"]==0).astype(int)
     alive["is_relate_1"] = (alive["relate"]==1).astype(int)
