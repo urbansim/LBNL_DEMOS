@@ -1942,8 +1942,6 @@ def update_married_households(persons, households, marriage_list):
     p_df["new_mar"] = marriage_list
     p_df["new_mar"].fillna(0, inplace=True)
     relevant = p_df[p_df["new_mar"] > 0].copy()
-    # print("New marriages:", (relevant["new_mar"] ==2).sum())
-    # print("New cohabs:", (relevant["new_mar"] ==1).sum())
     # Ensure an even number of people get married
     if relevant[relevant["new_mar"] == 1].shape[0] % 2 != 0:
         sampled = p_df[p_df["new_mar"] == 1].sample(1)
@@ -2130,13 +2128,6 @@ def update_married_households(persons, households, marriage_list):
         ),
     )
 
-    # final["new_relate"] = relate(final.shape[0])
-    ## NEED TO SEPARATE MARRIED FROM COHABITATE
-
-    # Households where everyone left
-    # household_matched = (p_df[p_df["household_id"].isin(final["household_id"].unique())].groupby("household_id").size() == final.groupby("household_id").size())
-    # removed_hh_values = household_matched[household_matched==True].index.values
-
     # Households where head left
     household_ids_reorganized = final[(final["stay"] == 0) & (final["relate"] == 0)][
         "household_id"
@@ -2144,7 +2135,6 @@ def update_married_households(persons, households, marriage_list):
 
     p_df.loc[final.index, "household_id"] = final["hh_new_id"]
     p_df.loc[final.index, "relate"] = final["new_relate"]
-    # print("HH SHAPE 1:", p_df["household_id"].unique().shape[0])
 
     households_restructuring = p_df.loc[
         p_df["household_id"].isin(household_ids_reorganized)
@@ -2158,25 +2148,6 @@ def update_married_households(persons, households, marriage_list):
     ] = 0
 
     household_df = household_df.loc[household_df.index.isin(p_df["household_id"])]
-
-    # print("HH SHAPE 1:", p_df["household_id"].unique().shape[0])
-
-    # leaf_hh = final.loc[final["stay"]==4, ["household_id", "partner_house"]]["household_id"].to_list()
-    # root_hh = final.loc[final["stay"]==2, ["household_id", "partner_house"]]["household_id"].to_list()
-    # new_hh = final.loc[final["stay"]==3, "hh_new_id"].to_list()
-
-    # household_mapping_dict = {leaf_hh[i]: root_hh[i] for i in range(len(root_hh))}
-
-    # household_df = household_df.reset_index()
-
-    # class MyDict(dict):
-    #     def __missing__(self, key):
-    #         return key
-
-    # recodes = MyDict(household_mapping_dict)
-
-    # household_df["household_id"] = household_df["household_id"].map(recodes)
-    # p_df["household_id"] = p_df["household_id"].map(recodes)
 
     p_df = p_df.sort_values("relate")
 
@@ -2204,13 +2175,9 @@ def update_married_households(persons, households, marriage_list):
         persons=("person", "sum"),
     )
 
-    # household_agg["lcm_county_id"] = household_agg["lcm_county_id"]
     household_agg["gt55"] = np.where(household_agg["persons_age_gt55"] > 0, 1, 0)
     household_agg["gt2"] = np.where(household_agg["persons"] > 2, 1, 0)
-    # household_agg["sf_detached"] = "unknown"
-    # household_agg["serialno"] = "unknown"
-    # household_agg["cars"] = np.random.ran
-    # dom_integers(0, 2, size=household_agg.shape[0])
+
     household_agg["hh_workers"] = np.where(
         household_agg["workers"] == 0,
         "none",
@@ -2258,23 +2225,6 @@ def update_married_households(persons, households, marriage_list):
         ),
     )
 
-    # agg_households = household_df.groupby("household_id").agg(serialno = ("serialno", "first"), # change to min once you change the serial number for all
-    #                                         cars = ("cars", "sum"),
-    #                                         # income = ("income", "sum"),
-    #                                         # workers = ("workers", "sum"),
-    #                                         tenure = ("tenure", "first"),
-    #                                         recent_mover = ("recent_mover", "first"),
-    #                                         sf_detached = ("sf_detached", "first"),
-    #                                         lcm_county_id = ("lcm_county_id", "first"),
-    #                                         block_id=("block_id", "first")) # we need hhtype here
-
-    # agg_households["hh_cars"] = np.where(agg_households["cars"] == 0, "none",
-    #                                         np.where(agg_households["cars"] == 1, "one", "two or more"))
-
-    # household_df = household_df.drop_duplicates(subset="household_id")
-
-    # household_df = household_df.set_index("household_id")
-    # household_df.update(agg_households)
     household_df.update(household_agg)
 
     final["MAR"] = np.where(final["new_mar"] == 2, 1, final["MAR"])
@@ -2299,32 +2249,8 @@ def update_married_households(persons, households, marriage_list):
     new_hh["hh_type"] = "-1"
     household_df = pd.concat([household_df, new_hh])
 
-    # p_df.update(relevant["household_id"])
-
-    #
-    # household_df = household_df.set_index("household_id")
-    # new_households = household_agg.loc[household_agg.index.isin(new_hh)].copy()
-    # new_households["serialno"] = "-1"
-    # new_households["cars"] = np.random.choice([0, 1, 2], size=new_households.shape[0])
-    # new_households["hispanic_status_of_head"] = -1
-    # new_households["tenure"] = -1
-    # new_households["recent_mover"] = "-1"
-    # new_households["sf_detached"] = "-1"
-    # new_households["hh_cars"] = np.where(new_households["cars"] == 0, "none",
-    #                                      np.where(new_households["cars"] == 1, "one", "two or more"))
-    # new_households["tenure_mover"] = "-1"
-    # new_households["block_id"] = "-1"
-    # new_households["hh_type"] = -1
-    # household_df = pd.concat([household_df, new_households])
-
-    # print('Time to run marriage', sp.duration)
     orca.add_table("households", household_df[household_cols])
     orca.add_table("persons", p_df[persons_cols])
-    # orca.add_injectable(
-    #     "max_hh_id", max(orca.get_injectable("max_hh_id"), household_df.index.max())
-    # )
-
-    # print("households size", household_df.shape[0])
 
     metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
