@@ -1680,29 +1680,12 @@ def update_married_households_random(persons, households, marriage_list):
     persons_local_cols = persons.local_columns
     hh_df = households.to_frame(columns=["lcm_county_id"])
     hh_df.reset_index(inplace=True)
-    # print("Indices duplicated:",p_df.index.duplicated().sum())
     p_df["new_mar"] = marriage_list
     p_df["new_mar"].fillna(0, inplace=True)
     relevant = p_df[p_df["new_mar"] > 0].copy()
-    # print("New married persons:", (relevant["new_mar"] ==2).sum())
-    # print("New cohabitating persons:", (relevant["new_mar"] ==1).sum())
-    # print("Still Single:",(relevant["new_mar"] ==0).sum())
-    # breakpoint()
+
     if ((relevant["new_mar"] ==1).sum() <= 10) or ((relevant["new_mar"] ==2).sum() <= 10):
         return None
-    # breakpoint()
-    # Ensure an even number of people get married
-    # if relevant[relevant["new_mar"]==1].shape[0] % 2 != 0:
-    #     sampled = p_df[p_df["new_mar"]==1].sample(1)
-    #     sampled.new_mar = 0
-    #     p_df.update(sampled)
-    #     relevant = p_df[p_df["new_mar"] > 0].copy()
-
-    # if relevant[relevant["new_mar"]==2].shape[0] % 2 != 0:
-    #     sampled = p_df[p_df["new_mar"]==2].sample(1)
-    #     sampled.new_mar = 0
-    #     p_df.update(sampled)
-    #     relevant = p_df[p_df["new_mar"] > 0].copy()
 
     relevant.sort_values("new_mar", inplace=True)
 
@@ -1737,13 +1720,10 @@ def update_married_households_random(persons, households, marriage_list):
     
     min_mar = int(min(min_mar_male, min_mar_female))
     min_cohab = int(min(min_cohab_male, min_cohab_female))
-    
-    # print("Number of marriages:", min_mar)
-    # print("Number of cohabitations:", min_cohab)
+
     if (min_mar == 0) or (min_mar == 0):
         return None
 
-    # breakpoint()
     female_mar = relevant[(relevant["new_mar"] == 2) & (relevant["person_sex"] == "female")].sample(min_mar)
     male_mar = relevant[(relevant["new_mar"] == 2) & (relevant["person_sex"] == "male")].sample(min_mar)
     female_coh = relevant[(relevant["new_mar"] == 1) & (relevant["person_sex"] == "female")].sample(min_cohab)
@@ -1785,7 +1765,6 @@ def update_married_households_random(persons, households, marriage_list):
 
     final = final[~(final["household_id"] == final["partner_house"])].copy()
 
-    # print("Pair people.")
     # Stay documentation
     # 0 - leaves household
     # 1 - stays
@@ -1815,26 +1794,16 @@ def update_married_households_random(persons, households, marriage_list):
     final.loc[final[CONDITION_4]["partner"].values, "new_household_id"] = new_household_ids
 
     # print('Finished Pairing')
-    # print("Updating households and persons table")
-    # print(final.household_id.unique().shape[0])
     metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
     current_max_id = max(max_hh_id, household_df.index.max())
     final["hh_new_id"] = np.where(final["stay"].isin([1]), final["household_id"], np.where(final["stay"].isin([0]),final["partner_house"],final["new_household_id"] + current_max_id + 1))
-
-    # final["new_relate"] = relate(final.shape[0])
-    ## NEED TO SEPARATE MARRIED FROM COHABITATE
-
-    # Households where everyone left
-    # household_matched = (p_df[p_df["household_id"].isin(final["household_id"].unique())].groupby("household_id").size() == final.groupby("household_id").size())
-    # removed_hh_values = household_matched[household_matched==True].index.values
 
     # Households where head left
     household_ids_reorganized = final[(final["stay"] == 0) & (final["relate"] == 0)]["household_id"].unique()
 
     p_df.loc[final.index, "household_id"] = final["hh_new_id"]
     p_df.loc[final.index, "relate"] = final["new_relate"]
-    # print("HH SHAPE 1:", p_df["household_id"].unique().shape[0])
 
     households_restructuring = p_df.loc[p_df["household_id"].isin(household_ids_reorganized)]
 
@@ -1842,25 +1811,6 @@ def update_married_households_random(persons, households, marriage_list):
     households_restructuring.loc[households_restructuring.groupby(["household_id"]).head(1).index, "relate"] = 0
 
     household_df = household_df.loc[household_df.index.isin(p_df["household_id"])]
-
-    # print("HH SHAPE 1:", p_df["household_id"].unique().shape[0])
-
-    # leaf_hh = final.loc[final["stay"]==4, ["household_id", "partner_house"]]["household_id"].to_list()
-    # root_hh = final.loc[final["stay"]==2, ["household_id", "partner_house"]]["household_id"].to_list()
-    # new_hh = final.loc[final["stay"]==3, "hh_new_id"].to_list()
-
-    # household_mapping_dict = {leaf_hh[i]: root_hh[i] for i in range(len(root_hh))}
-
-    # household_df = household_df.reset_index()
-
-    # class MyDict(dict):
-    #     def __missing__(self, key):
-    #         return key
-
-    # recodes = MyDict(household_mapping_dict)
-
-    # household_df["household_id"] = household_df["household_id"].map(recodes)
-    # p_df["household_id"] = p_df["household_id"].map(recodes)
 
     p_df = p_df.sort_values("relate")
 
@@ -1918,15 +1868,9 @@ def update_married_households_random(persons, households, marriage_list):
         ),
     )
 
-    # household_df = household_df.drop_duplicates(subset="household_id")
-
-    # household_df = household_df.set_index("household_id")
-    # household_df.update(agg_households)
     household_df.update(household_agg)
-    # household_df.loc[household_agg.index, persons_local_cols] = household_agg.loc[household_agg, persons_local_cols].to_numpy()
 
     final["MAR"] = np.where(final["new_mar"] == 2, 1, final["MAR"])
-    # p_df.update(final["MAR"])
     p_df["NEW_MAR"] = final["MAR"]
     p_df["MAR"] = np.where(p_df["NEW_MAR"].isna(),p_df["MAR"], p_df["NEW_MAR"])
 
@@ -1945,46 +1889,9 @@ def update_married_households_random(persons, households, marriage_list):
     new_hh["hh_type"] = "-1"
     household_df = pd.concat([household_df, new_hh])
 
-    # p_df.update(relevant["household_id"])
-
-    #
-    # household_df = household_df.set_index("household_id")
-    # new_households = household_agg.loc[household_agg.index.isin(new_hh)].copy()
-    # new_households["serialno"] = "-1"
-    # new_households["cars"] = np.random.choice([0, 1, 2], size=new_households.shape[0])
-    # new_households["hispanic_status_of_head"] = -1
-    # new_households["tenure"] = -1
-    # new_households["recent_mover"] = "-1"
-    # new_households["sf_detached"] = "-1"
-    # new_households["hh_cars"] = np.where(new_households["cars"] == 0, "none",
-    #                                      np.where(new_households["cars"] == 1, "one", "two or more"))
-    # new_households["tenure_mover"] = "-1"
-    # new_households["block_id"] = "-1"
-    # new_households["hh_type"] = -1
-    # household_df = pd.concat([household_df, new_households])
-    # breakpoint()
-
-    # print("HH Size from Persons: ", p_df["household_id"].unique().shape[0])
-    # print("HH Size from Household: ", household_df.index.unique().shape[0])
-    # print("HH in HH_DF not in P_DF:", len(sorted(set(household_df.index.unique()) - set(p_df["household_id"].unique()))))
-    # print("HH in P_DF not in HH_DF:", len(sorted(set(p_df["household_id"].unique()) - set(household_df.index.unique()))))
-    # print("HHs with NA persons:", household_df["persons"].isna().sum())
-    # print("HH duplicates: ", household_df.index.has_duplicates)
-    # # print("Counties: ", households["lcm_county_id"].unique())
-    # print("Persons Size: ", p_df.index.unique().shape[0])
-    # print("Persons Duplicated: ", p_df.index.has_duplicates)
-
-    # if len(sorted(set(household_df.index.unique()) - set(p_df["household_id"].unique()))) > 0:
-    #     breakpoint()
-    # if len(sorted(set(p_df["household_id"].unique()) - set(household_df.index.unique()))) > 0:
-    #     breakpoint()
-
     # print('Time to run marriage', sp.duration)
     orca.add_table("households", household_df[household_cols])
     orca.add_table("persons", p_df[persons_cols])
-    # orca.add_injectable(
-    #     "max_hh_id", max(orca.get_injectable("max_hh_id"), household_df.index.max())
-    # )
 
     # print("households size", household_df.shape[0])
     metadata = orca.get_table("metadata").to_frame()
