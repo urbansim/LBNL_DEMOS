@@ -1016,7 +1016,6 @@ def birth_model(persons, households, year):
         btable_df = pd.concat([btable_df, btable_df_new], ignore_index=True)
     orca.add_table("btable", btable_df)
 
-
 def update_birth(persons, households, birth_list):
     """
     Update the persons tables with newborns and household sizes
@@ -1163,6 +1162,201 @@ def update_birth(persons, households, birth_list):
     
     orca.add_table("metadata", metadata)
     # orca.add_injectable("max_p_id", max(highest_index, orca.get_injectable("max_p_id")))
+
+def extract_students(persons):
+    """Retrieve the list of grade school students
+
+
+    Args:
+        persons (Orca table): Persons orca table
+
+    Returns:
+        DataFrame: pandas dataframe of grade school students.
+    """
+    edu_levels = np.arange(3, 16).astype(float)
+    STUDENTS_CONDITION = (persons["student"]==1) & (persons["edu"].isin(edu_levels))
+    students_df = persons[STUDENTS_CONDITION].copy()
+    students_df["STUDENT_SCHOOL_LEVEL"] = np.where(
+        students_df["edu"]<=8, "ELEMENTARY",
+        np.where(students_df["edu"]<=11, "MIDDLE", "HIGH"))
+    students_df = students_df.reset_index()
+    return students_df
+
+def create_student_groups(students_df):
+    """Generate a dataframe of students from same
+    household and same grade level
+
+    Args:
+        students_df (DataFrame): grade level students DataFrame
+
+    Returns:
+        DataFrame: grouped students by household and grade level
+    """
+    students_df = students_df[students_df["DET_DIST_TYPE"]==students_df["STUDENT_SCHOOL_LEVEL"]].reset_index(drop=True)
+    student_groups = students_df.groupby(['household_id', 'GEOID10_SD', 'STUDENT_SCHOOL_LEVEL'])['person_id'].apply(list).reset_index(name='students')
+    student_groups["DISTRICT_LEVEL"] = student_groups.apply(lambda row: (row['GEOID10_SD'], row['STUDENT_SCHOOL_LEVEL']), axis=1)
+    student_groups["size_student_group"] = [len(x) for x in student_groups["students"]]
+    student_groups = student_groups.sort_values(by=["GEOID10_SD", "STUDENT_SCHOOL_LEVEL"]).reset_index(drop=True)
+    student_groups["CUM_STUDENTS"] = student_groups.groupby(["GEOID10_SD", "STUDENT_SCHOOL_LEVEL"])["size_student_group"].cumsum()
+    return student_groups
+
+def assign_schools(student_groups, blocks_districts, schools_df):
+    """Assigns students to schools from the same school district
+
+    Args:
+        student_groups (DataFrame): Dataframe of student groups
+        blocks_districts (DataFrame): Dataframe of crosswalk between
+        blocks and school districts
+        schools_df (DataFrame): DataFrame of list of schools in region
+
+    Returns:
+        list: list of assigned students
+    """
+    assigned_students_list = []
+    for tuple in blocks_districts["DISTRICT_LEVEL"].unique():
+        SCHOOL_DISTRICT = tuple[0]
+        SCHOOL_LEVEL = tuple[1]
+        schools_pool = schools_df[(schools_df["SCHOOL_LEVEL"]==SCHOOL_LEVEL) &\
+                                (schools_df["GEOID10_SD"]==SCHOOL_DISTRICT)].copy()
+        student_pool = student_groups[(student_groups["STUDENT_SCHOOL_LEVEL"]==SCHOOL_LEVEL) &\
+                        (student_groups["GEOID10_SD"]==SCHOOL_DISTRICT)].copy()
+        student_pool = student_pool.sample(frac = 1)
+        # Iterate over schools_df
+        for idx, row in schools_pool.iterrows():
+            # Get the pool of students for the district and level of the school
+            SCHOOL_LEVEL = row["SCHOOL_LEVEL"]
+            SCHOOL_DISTRICT = row["GEOID10_SD"]
+            # Calculate the number of students to assign
+            n_students = min(student_pool["size_student_group"].sum(), row['CAP_TOTAL'])
+            student_pool["CUM_STUDENTS"] = student_pool["size_student_group"].cumsum()
+            student_pool["ASSIGNED"] = np.where(student_pool["CUM_STUDENTS"]<=n_students, 1, 0)
+            # Randomly sample students without replacement
+            assigned_students = student_pool[student_pool["CUM_STUDENTS"]<=n_students].copy()
+            assigned_students["SCHOOL_ID"] = row["SCHOOL_ID"]
+            assigned_students_list.append(assigned_students)
+            student_pool = student_pool[student_pool["ASSIGNED"]==0].copy()
+    return assigned_students_list
+
+def create_results_table(students_df, assigned_students_list, year):
+    """Creates table of student assignment
+
+    Args:
+        students_df (DataFrame): students dataframe
+        assigned_students_list (list): student assignment list
+        year (int): year of simulation
+
+    Returns:
+        DataFrame: student assignment dataframe
+    """
+    assigned_students_df = pd.concat(assigned_students_list)[["students", "household_id", "GEOID10_SD", "STUDENT_SCHOOL_LEVEL", "SCHOOL_ID"]]
+    assigned_students_df = assigned_students_df.explode("students").rename(columns={"students": "person_id",
+                                                                                    "SCHOOL_ID": "school_id",})
+    school_assignment_df = students_df[["person_id"]].merge(assigned_students_df[["person_id", "school_id", "GEOID10_SD"]], on="person_id", how='left').fillna("-1")
+    school_assignment_df["year"] = year
+    return school_assignment_df
+
+@orca.step("mlcm_postprocessing")
+def mlcm_postprocessing(persons):
+    """Geographically assign work and school locations
+    to workers and students
+
+    Args:
+        persons (Orca table): Orca table of persons
+    """
+    persons_df = orca.get_table("persons").local
+    persons_df = persons_df.reset_index()
+    # schools_df = orca.get_table("schools").to_frame()
+    # school_assignment_df = orca.get_table("school_locations").to_frame()
+
+    geoid_to_zone = orca.get_table("geoid_to_zone").to_frame()
+    geoid_to_zone["work_block_id"] = geoid_to_zone["GEOID10"].copy()
+    # geoid_to_zone["school_taz"] = geoid_to_zone["zone_id"].copy()
+    geoid_to_zone["workplace_taz"] = geoid_to_zone["zone_id"].copy()
+
+    # schools_df = schools_df.drop_duplicates(subset=["school_id"], keep="first")
+    # school_assignment_df = school_assignment_df.merge(
+    # schools_df[["school_id", "GEOID10"]], on=["school_id"], how='left')
+    # school_assignment_df["GEOID10"] = school_assignment_df["GEOID10"].fillna("-1")
+    # school_assignment_df["school_block_id"] = school_assignment_df["GEOID10"].copy().fillna("-1")
+    # school_assignment_df = school_assignment_df.merge(
+    # geoid_to_zone[["GEOID10", "school_taz"]], on=["GEOID10"], how='left')
+    
+    # persons_df = persons_df.merge(
+    # school_assignment_df[["person_id", "school_id", "school_block_id", "school_taz"]],
+    #  on=["person_id"], suffixes=('', '_replace'), how="left")
+
+    # persons_df["school_taz"] = persons_df["school_taz_replace"].copy().fillna("-1")
+    # persons_df["school_id"] = persons_df["school_id_replace"].copy().fillna("-1")
+    # persons_df["school_block_id"] = persons_df["school_block_id_replace"].copy().fillna("-1")
+
+    # work_locations = orca.get_table('work_locations').to_frame()
+    # work_locations["GEOID10"] = work_locations["work_block_id"].copy().astype("str")
+    # work_locations = work_locations.merge(
+    # geoid_to_zone[["GEOID10", "workplace_taz"]], on=["GEOID10"], how='left')
+    # work_locations["workplace_taz"] = work_locations["workplace_taz"].copy().fillna("-1")
+
+    persons_df = persons_df.merge(geoid_to_zone[["work_block_id", "workplace_taz"]], on=["work_block_id"], suffixes=('', '_replace'), how="left")
+    persons_df["workplace_taz"] = persons_df["workplace_taz_replace"].copy().fillna("-1")
+    persons_df["work_zone_id"] = persons_df["workplace_taz"].copy()
+    persons_df = persons_df.set_index("person_id")
+
+    persons_cols = orca.get_injectable("persons_local_cols")
+
+    orca.add_table("persons", persons_df[persons_cols])
+
+@orca.step("school_location")
+def school_location(persons, households, year):
+    """Runs the school location assignment model
+    for grade school students
+
+    Args:
+        persons (Orca table): Orca table of persons
+        households (Orca table): Orca table of households
+        year (int): simulation year
+    """
+    persons_df = orca.get_table("persons").local
+    students_df = extract_students(persons_df)
+    schools_df = orca.get_table("schools").to_frame()
+    blocks_districts = orca.get_table("blocks_districts").to_frame()
+    households_df = orca.get_table("households").local
+    households_df = households_df.reset_index()
+    households_districts = households_df[["household_id", "block_id"]].merge(
+        blocks_districts, left_on="block_id", right_on="GEOID10")
+    students_df = students_df.merge(
+        households_districts.reset_index(), on="household_id")
+    students_df = students_df[students_df["STUDENT_SCHOOL_LEVEL"]==students_df["DET_DIST_TYPE"]].copy()
+    student_groups = create_student_groups(students_df)
+
+    assigned_students_list = assign_schools(student_groups,
+                                            blocks_districts,
+                                            schools_df)
+
+    school_assignment_df = create_results_table(students_df, assigned_students_list, year)
+
+    orca.add_table("school_locations", school_assignment_df[["person_id", "school_id"]])
+
+@orca.step("kids_moving_model")
+def kids_moving_model(persons, households):
+    """
+    Running the kids moving model and updating household
+    stats.
+
+    Args:
+        persons (DataFrameWrapper): DataFrameWrapper of the persons table
+        households (DataFrameWrapper): DataFrameWrapper of the households table
+
+    Returns:
+        None
+    """
+    persons_df = orca.get_table("persons").local
+    persons_df["kid_moves"] = -99
+    orca.add_table("persons", persons_df)
+
+    kids_moving_model = mm.get_step("kids_move")
+    kids_moving_model.run()
+    kids_moving = kids_moving_model.choices.astype(int)
+
+    update_households_after_kids(persons, households, kids_moving)
 
 
 def update_households_after_kids(persons, households, kids_moving):
@@ -1463,200 +1657,6 @@ def update_households_after_kids(persons, households, kids_moving):
     orca.add_table("kids_move_table", kids_moving_table)
 
 
-def extract_students(persons):
-    """Retrieve the list of grade school students
-
-
-    Args:
-        persons (Orca table): Persons orca table
-
-    Returns:
-        DataFrame: pandas dataframe of grade school students.
-    """
-    edu_levels = np.arange(3, 16).astype(float)
-    STUDENTS_CONDITION = (persons["student"]==1) & (persons["edu"].isin(edu_levels))
-    students_df = persons[STUDENTS_CONDITION].copy()
-    students_df["STUDENT_SCHOOL_LEVEL"] = np.where(
-        students_df["edu"]<=8, "ELEMENTARY",
-        np.where(students_df["edu"]<=11, "MIDDLE", "HIGH"))
-    students_df = students_df.reset_index()
-    return students_df
-
-def create_student_groups(students_df):
-    """Generate a dataframe of students from same
-    household and same grade level
-
-    Args:
-        students_df (DataFrame): grade level students DataFrame
-
-    Returns:
-        DataFrame: grouped students by household and grade level
-    """
-    students_df = students_df[students_df["DET_DIST_TYPE"]==students_df["STUDENT_SCHOOL_LEVEL"]].reset_index(drop=True)
-    student_groups = students_df.groupby(['household_id', 'GEOID10_SD', 'STUDENT_SCHOOL_LEVEL'])['person_id'].apply(list).reset_index(name='students')
-    student_groups["DISTRICT_LEVEL"] = student_groups.apply(lambda row: (row['GEOID10_SD'], row['STUDENT_SCHOOL_LEVEL']), axis=1)
-    student_groups["size_student_group"] = [len(x) for x in student_groups["students"]]
-    student_groups = student_groups.sort_values(by=["GEOID10_SD", "STUDENT_SCHOOL_LEVEL"]).reset_index(drop=True)
-    student_groups["CUM_STUDENTS"] = student_groups.groupby(["GEOID10_SD", "STUDENT_SCHOOL_LEVEL"])["size_student_group"].cumsum()
-    return student_groups
-
-def assign_schools(student_groups, blocks_districts, schools_df):
-    """Assigns students to schools from the same school district
-
-    Args:
-        student_groups (DataFrame): Dataframe of student groups
-        blocks_districts (DataFrame): Dataframe of crosswalk between
-        blocks and school districts
-        schools_df (DataFrame): DataFrame of list of schools in region
-
-    Returns:
-        list: list of assigned students
-    """
-    assigned_students_list = []
-    for tuple in blocks_districts["DISTRICT_LEVEL"].unique():
-        SCHOOL_DISTRICT = tuple[0]
-        SCHOOL_LEVEL = tuple[1]
-        schools_pool = schools_df[(schools_df["SCHOOL_LEVEL"]==SCHOOL_LEVEL) &\
-                                (schools_df["GEOID10_SD"]==SCHOOL_DISTRICT)].copy()
-        student_pool = student_groups[(student_groups["STUDENT_SCHOOL_LEVEL"]==SCHOOL_LEVEL) &\
-                        (student_groups["GEOID10_SD"]==SCHOOL_DISTRICT)].copy()
-        student_pool = student_pool.sample(frac = 1)
-        # Iterate over schools_df
-        for idx, row in schools_pool.iterrows():
-            # Get the pool of students for the district and level of the school
-            SCHOOL_LEVEL = row["SCHOOL_LEVEL"]
-            SCHOOL_DISTRICT = row["GEOID10_SD"]
-            # Calculate the number of students to assign
-            n_students = min(student_pool["size_student_group"].sum(), row['CAP_TOTAL'])
-            student_pool["CUM_STUDENTS"] = student_pool["size_student_group"].cumsum()
-            student_pool["ASSIGNED"] = np.where(student_pool["CUM_STUDENTS"]<=n_students, 1, 0)
-            # Randomly sample students without replacement
-            assigned_students = student_pool[student_pool["CUM_STUDENTS"]<=n_students].copy()
-            assigned_students["SCHOOL_ID"] = row["SCHOOL_ID"]
-            assigned_students_list.append(assigned_students)
-            student_pool = student_pool[student_pool["ASSIGNED"]==0].copy()
-    return assigned_students_list
-
-def create_results_table(students_df, assigned_students_list, year):
-    """Creates table of student assignment
-
-    Args:
-        students_df (DataFrame): students dataframe
-        assigned_students_list (list): student assignment list
-        year (int): year of simulation
-
-    Returns:
-        DataFrame: student assignment dataframe
-    """
-    assigned_students_df = pd.concat(assigned_students_list)[["students", "household_id", "GEOID10_SD", "STUDENT_SCHOOL_LEVEL", "SCHOOL_ID"]]
-    assigned_students_df = assigned_students_df.explode("students").rename(columns={"students": "person_id",
-                                                                                    "SCHOOL_ID": "school_id",})
-    school_assignment_df = students_df[["person_id"]].merge(assigned_students_df[["person_id", "school_id", "GEOID10_SD"]], on="person_id", how='left').fillna("-1")
-    school_assignment_df["year"] = year
-    return school_assignment_df
-
-@orca.step("mlcm_postprocessing")
-def mlcm_postprocessing(persons):
-    """Geographically assign work and school locations
-    to workers and students
-
-    Args:
-        persons (Orca table): Orca table of persons
-    """
-    persons_df = orca.get_table("persons").local
-    persons_df = persons_df.reset_index()
-    # schools_df = orca.get_table("schools").to_frame()
-    # school_assignment_df = orca.get_table("school_locations").to_frame()
-
-    geoid_to_zone = orca.get_table("geoid_to_zone").to_frame()
-    geoid_to_zone["work_block_id"] = geoid_to_zone["GEOID10"].copy()
-    # geoid_to_zone["school_taz"] = geoid_to_zone["zone_id"].copy()
-    geoid_to_zone["workplace_taz"] = geoid_to_zone["zone_id"].copy()
-
-    # schools_df = schools_df.drop_duplicates(subset=["school_id"], keep="first")
-    # school_assignment_df = school_assignment_df.merge(
-    # schools_df[["school_id", "GEOID10"]], on=["school_id"], how='left')
-    # school_assignment_df["GEOID10"] = school_assignment_df["GEOID10"].fillna("-1")
-    # school_assignment_df["school_block_id"] = school_assignment_df["GEOID10"].copy().fillna("-1")
-    # school_assignment_df = school_assignment_df.merge(
-    # geoid_to_zone[["GEOID10", "school_taz"]], on=["GEOID10"], how='left')
-    
-    # persons_df = persons_df.merge(
-    # school_assignment_df[["person_id", "school_id", "school_block_id", "school_taz"]],
-    #  on=["person_id"], suffixes=('', '_replace'), how="left")
-
-    # persons_df["school_taz"] = persons_df["school_taz_replace"].copy().fillna("-1")
-    # persons_df["school_id"] = persons_df["school_id_replace"].copy().fillna("-1")
-    # persons_df["school_block_id"] = persons_df["school_block_id_replace"].copy().fillna("-1")
-
-    # work_locations = orca.get_table('work_locations').to_frame()
-    # work_locations["GEOID10"] = work_locations["work_block_id"].copy().astype("str")
-    # work_locations = work_locations.merge(
-    # geoid_to_zone[["GEOID10", "workplace_taz"]], on=["GEOID10"], how='left')
-    # work_locations["workplace_taz"] = work_locations["workplace_taz"].copy().fillna("-1")
-
-    persons_df = persons_df.merge(geoid_to_zone[["work_block_id", "workplace_taz"]], on=["work_block_id"], suffixes=('', '_replace'), how="left")
-    persons_df["workplace_taz"] = persons_df["workplace_taz_replace"].copy().fillna("-1")
-    persons_df["work_zone_id"] = persons_df["workplace_taz"].copy()
-    persons_df = persons_df.set_index("person_id")
-
-    persons_cols = orca.get_injectable("persons_local_cols")
-
-    orca.add_table("persons", persons_df[persons_cols])
-
-@orca.step("school_location")
-def school_location(persons, households, year):
-    """Runs the school location assignment model
-    for grade school students
-
-    Args:
-        persons (Orca table): Orca table of persons
-        households (Orca table): Orca table of households
-        year (int): simulation year
-    """
-    persons_df = orca.get_table("persons").local
-    students_df = extract_students(persons_df)
-    schools_df = orca.get_table("schools").to_frame()
-    blocks_districts = orca.get_table("blocks_districts").to_frame()
-    households_df = orca.get_table("households").local
-    households_df = households_df.reset_index()
-    households_districts = households_df[["household_id", "block_id"]].merge(
-        blocks_districts, left_on="block_id", right_on="GEOID10")
-    students_df = students_df.merge(
-        households_districts.reset_index(), on="household_id")
-    students_df = students_df[students_df["STUDENT_SCHOOL_LEVEL"]==students_df["DET_DIST_TYPE"]].copy()
-    student_groups = create_student_groups(students_df)
-
-    assigned_students_list = assign_schools(student_groups,
-                                            blocks_districts,
-                                            schools_df)
-
-    school_assignment_df = create_results_table(students_df, assigned_students_list, year)
-
-    orca.add_table("school_locations", school_assignment_df[["person_id", "school_id"]])
-
-@orca.step("kids_moving_model")
-def kids_moving_model(persons, households):
-    """
-    Running the kids moving model and updating household
-    stats.
-
-    Args:
-        persons (DataFrameWrapper): DataFrameWrapper of the persons table
-        households (DataFrameWrapper): DataFrameWrapper of the households table
-
-    Returns:
-        None
-    """
-    persons_df = orca.get_table("persons").local
-    persons_df["kid_moves"] = -99
-    orca.add_table("persons", persons_df)
-
-    kids_moving_model = mm.get_step("kids_move")
-    kids_moving_model.run()
-    kids_moving = kids_moving_model.choices.astype(int)
-
-    update_households_after_kids(persons, households, kids_moving)
 
 @orca.step("marriage_model")
 def marriage_model(persons, households):
