@@ -1556,13 +1556,9 @@ def update_households_after_kids(persons, households, kids_moving):
         [households_df[households_local_cols], agg_households[households_local_cols]]
     )
     persons_df = pd.concat([persons_df[persons_local_cols], new_hh[persons_local_cols]])
-    # print(households_df["hh_size"].unique())
     # add to orca
     orca.add_table("households", households_df[households_local_cols])
     orca.add_table("persons", persons_df[persons_local_cols])
-    # orca.add_injectable(
-    #     "max_hh_id", max(households_df.index.max(), orca.get_injectable("max_hh_id"))
-    # )
 
     metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
