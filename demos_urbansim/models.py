@@ -712,34 +712,6 @@ def update_education_status(persons, student_list, year):
     orca.get_table("persons").update_col("edu", persons_df["edu"])
     orca.get_table("persons").update_col("student", persons_df["student"])
 
-    # compute mean age of students
-    # print("Updating students metrics...")
-    students = persons_df[persons_df["student"] == 1]
-    edu_over_time = orca.get_table("edu_over_time").to_frame()
-    # student_population = orca.get_table("student_population").to_frame()
-    # if student_population.empty:
-    #     student_population = pd.DataFrame(
-    #         data={"year": [year], "count": [students.shape[0]]}
-    #     )
-    # else:
-    #     student_population_new = pd.DataFrame(
-    #         data={"year": [year], "count": [students.shape[0]]}
-    #     )
-    #     students = pd.concat([student_population, student_population_new])
-    # if edu_over_time.empty:
-    #     edu_over_time = pd.DataFrame(
-    #         data={"year": [year], "mean_age_of_students": [students["age"].mean()]}
-    #     )
-    # else:
-    #     edu_over_time = edu_over_time.append(
-    #         pd.DataFrame(
-    #             {"year": [year], "mean_age_of_students": [students["age"].mean()]}
-    #         ),
-    #         ignore_index=True,
-    #     )
-
-    # orca.add_table("edu_over_time", edu_over_time)
-    # orca.add_table("student_population", student_population)
 
 
 @orca.step("education_model")
