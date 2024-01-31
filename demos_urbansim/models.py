@@ -144,29 +144,6 @@ def simulation_mnl(data, coeffs):
     return pd.Series(index=data.index, data=choices)
 
 
-# @orca.step("add_temp_variables")
-# def add_temp_variables():
-#     """Adds temporary variables to the persons and
-#     households tables.
-#     """
-#     persons = orca.get_table("persons").local
-#     persons.loc[:, "dead"] = -99
-#     persons.loc[:, "stop"] = -99
-#     persons.loc[:, "kid_moves"] = -99
-
-#     orca.add_table("persons", persons)
-
-
-@orca.step("remove_temp_variables")
-def remove_temp_variables():
-    """Removes temporary variables from the persons
-    and households tables
-    """
-    persons = orca.get_table("persons").local
-    persons = persons.drop(columns=["dead", "stop", "kid_moves"])
-    orca.add_table("persons", persons)
-
-
 # -----------------------------------------------------------------------------------------
 # DEMOS
 # -----------------------------------------------------------------------------------------
@@ -3517,7 +3494,6 @@ if orca.get_injectable("running_calibration_routine") == False:
                     )
 
     if orca.get_injectable("local_simulation") == True:
-        # add_variables = ["add_temp_variables"]
         start_of_year_models = ["status_report"]
         demo_models = [
             # "update_age",
@@ -3530,7 +3506,6 @@ if orca.get_injectable("running_calibration_routine") == False:
             "export_demo_stats",
         ]
         pre_processing_steps = price_models + ["build_networks", "generate_outputs", "update_travel_data"]
-        # rem_variables = ["remove_temp_variables"]
         export_demo_steps = ["export_demo_stats"]
         household_stats = ["household_stats"]
         school_models = ["school_location"]
