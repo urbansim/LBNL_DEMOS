@@ -144,17 +144,17 @@ def simulation_mnl(data, coeffs):
     return pd.Series(index=data.index, data=choices)
 
 
-@orca.step("add_temp_variables")
-def add_temp_variables():
-    """Adds temporary variables to the persons and
-    households tables.
-    """
-    persons = orca.get_table("persons").local
-    persons.loc[:, "dead"] = -99
-    persons.loc[:, "stop"] = -99
-    persons.loc[:, "kid_moves"] = -99
+# @orca.step("add_temp_variables")
+# def add_temp_variables():
+#     """Adds temporary variables to the persons and
+#     households tables.
+#     """
+#     persons = orca.get_table("persons").local
+#     persons.loc[:, "dead"] = -99
+#     persons.loc[:, "stop"] = -99
+#     persons.loc[:, "kid_moves"] = -99
 
-    orca.add_table("persons", persons)
+#     orca.add_table("persons", persons)
 
 
 @orca.step("remove_temp_variables")
@@ -894,6 +894,31 @@ def calibrate_model(model, target_count, threshold=0.05):
         error = (predictions.sum() - target_count.sum())/target_count.sum()
     return predictions
 
+def get_eligible_households(persons_df):
+    ELIGIBILITY_COND = (
+        (persons_df["sex"] == 2)
+        & (persons_df["age"].between(14, 45))
+    )
+
+    # Subset of eligible households
+    ELIGIBLE_HH = persons_df.loc[ELIGIBILITY_COND, "household_id"].unique()
+    # eligible_hh_df = households_df.loc[ELIGIBLE_HH]
+
+    # btable_elig_df = orca.get_table("btable_elig").to_frame()
+    # if btable_elig_df.empty:
+    #     btable_elig_df = pd.DataFrame.from_dict({
+    #         "year": [str(year)],
+    #         "count":  [ELIGIBLE_HH.shape[0]]
+    #         })
+    # else:
+    #     btable_elig_df_new = pd.DataFrame.from_dict({
+    #         "year": [str(year)],
+    #         "count":  [ELIGIBLE_HH.shape[0]]
+    #         })
+    #     btable_elig_df = pd.concat([btable_elig_df, btable_elig_df_new], ignore_index=True)
+    # orca.add_table("btable_elig", btable_elig_df)
+    return list(ELIGIBLE_HH)
+
 @orca.step("birth_model")
 def birth_model(persons, households, year):
     """
@@ -915,34 +940,12 @@ def birth_model(persons, households, year):
     # persons = orca.get_table('persons')
     col_subset = ["sex", "age", "household_id", "relate"]
     persons_df = persons.to_frame(col_subset)
-    
-    ELIGIBILITY_COND = (
-        (persons_df["sex"] == 2)
-        & (persons_df["age"].between(14, 45))
-    )
 
-    # Subset of eligible households
-    ELIGIBLE_HH = persons_df.loc[ELIGIBILITY_COND, "household_id"].unique()
-    eligible_hh_df = households_df.loc[ELIGIBLE_HH]
-
-    btable_elig_df = orca.get_table("btable_elig").to_frame()
-    if btable_elig_df.empty:
-        btable_elig_df = pd.DataFrame.from_dict({
-            "year": [str(year)],
-            "count":  [ELIGIBLE_HH.shape[0]]
-            })
-    else:
-        btable_elig_df_new = pd.DataFrame.from_dict({
-            "year": [str(year)],
-            "count":  [ELIGIBLE_HH.shape[0]]
-            })
-        btable_elig_df = pd.concat([btable_elig_df, btable_elig_df_new], ignore_index=True)
-    orca.add_table("btable_elig", btable_elig_df)
-
+    eligible_households = get_eligible_households(persons_df)
+    # breakpoint()
     # Run model
     birth = mm.get_step("birth")
-    list_ids = str(eligible_hh_df.index.to_list())
-    # print(len(eligible_hh_df.index.to_list()))
+    list_ids = str(eligible_households)
     birth.filters = "index in " + list_ids
     birth.out_filters = "index in " + list_ids
 
@@ -972,21 +975,75 @@ def birth_model(persons, households, year):
         btable_df = pd.concat([btable_df, btable_df_new], ignore_index=True)
     orca.add_table("btable", btable_df)
 
-def update_birth(persons, households, birth_list):
-    """
-    Update the persons tables with newborns and household sizes
+def initialize_newborns(persons_df, households_df, birth_list):
+    # Get indices of households with babies
+    house_indices = list(birth_list[birth_list == 1].index)
 
-    Args:
-        persons (DataFrameWrapper): DataFrameWrapper of the persons table
-        households (DataFrameWrapper): DataFrameWrapper of the persons table
-        birth_list (pd.Series): Pandas Series of the households with newborns
+    # Initialize babies variables in the persons table.
+    ## TODO: PREFER TO PUT THIS IN A FUNCTION
+    newborns = pd.DataFrame(house_indices, columns=["household_id"])
+    newborns["age"] = 0
+    newborns["edu"] = 0
+    newborns["earning"] = 0
+    newborns["hours"] = 0
+    newborns["relate"] = 2
+    newborns["MAR"] = 5
+    newborns["sex"] = np.random.choice([1, 2])
+    newborns["student"] = 0
 
-    Returns:
-        None
-    """
-    persons_df = persons.local
-    households_df = households.local
-    households_columns = households_df.columns
+    newborns["person_age"] = "19 and under"
+    newborns["person_sex"] = newborns["sex"].map({1: "male", 2: "female"})
+    newborns["child"] = 1
+    newborns["senior"] = 0
+    newborns["dead"] = -99
+    newborns["person"] = 1
+    newborns["work_at_home"] = 0
+    newborns["worker"] = 0
+    newborns["work_block_id"] = "-1"
+    newborns["work_zone_id"] = "-1"
+    newborns["workplace_taz"] = "-1"
+    newborns["school_block_id"] = "-1"
+    newborns["school_id"] = "-1"
+    newborns["school_taz"] = "-1"
+    newborns["school_zone_id"] = "-1"
+    newborns["education_group"] = "lte17"
+    newborns["age_group"] = "lte20"
+    household_races = (
+        persons_df.groupby("household_id")
+        .agg(num_races=("race_id", "nunique"))
+        .reset_index()
+        .merge(households_df["race_of_head"].reset_index(), on="household_id")
+    )
+    newborns = newborns.reset_index().merge(household_races, on="household_id")
+    newborns["race_id"] = np.where(newborns["num_races"] == 1, newborns["race_of_head"], 9)
+    newborns["race"] = newborns["race_id"].map(
+        {
+            1: "white",
+            2: "black",
+            3: "other",
+            4: "other",
+            5: "other",
+            6: "other",
+            7: "other",
+            8: "other",
+            9: "other",
+        }
+    )
+
+    # Get heads of households
+    heads = persons_df[persons_df["relate"] == 0]
+    newborns = (
+        newborns.reset_index()
+        .merge(
+            heads[["hispanic", "hispanic.1", "p_hispanic", "household_id"]],
+            on="household_id",
+        )
+    )
+
+    return newborns
+
+
+def create_newborn_ids(newborns, persons_df):
 
     # Pull max person index from persons table
     highest_index = persons_df.index.max()
@@ -1007,71 +1064,8 @@ def update_birth(persons, households, birth_list):
         highest_dead_index = dead_df.index.max()
         highest_index = max(highest_dead_index, highest_index)
 
-    # Get heads of households
-    heads = persons_df[persons_df["relate"] == 0]
-
-    # Get indices of households with babies
-    house_indices = list(birth_list[birth_list == 1].index)
-
-    # Initialize babies variables in the persons table.
-    babies = pd.DataFrame(house_indices, columns=["household_id"])
-    babies.index += highest_index + 1
-    babies.index.name = "person_id"
-    babies["age"] = 0
-    babies["edu"] = 0
-    babies["earning"] = 0
-    babies["hours"] = 0
-    babies["relate"] = 2
-    babies["MAR"] = 5
-    babies["sex"] = np.random.choice([1, 2])
-    babies["student"] = 0
-
-    babies["person_age"] = "19 and under"
-    babies["person_sex"] = babies["sex"].map({1: "male", 2: "female"})
-    babies["child"] = 1
-    babies["senior"] = 0
-    babies["dead"] = -99
-    babies["person"] = 1
-    babies["work_at_home"] = 0
-    babies["worker"] = 0
-    babies["work_block_id"] = "-1"
-    babies["work_zone_id"] = "-1"
-    babies["workplace_taz"] = "-1"
-    babies["school_block_id"] = "-1"
-    babies["school_id"] = "-1"
-    babies["school_taz"] = "-1"
-    babies["school_zone_id"] = "-1"
-    babies["education_group"] = "lte17"
-    babies["age_group"] = "lte20"
-    household_races = (
-        persons_df.groupby("household_id")
-        .agg(num_races=("race_id", "nunique"))
-        .reset_index()
-        .merge(households_df["race_of_head"].reset_index(), on="household_id")
-    )
-    babies = babies.reset_index().merge(household_races, on="household_id")
-    babies["race_id"] = np.where(babies["num_races"] == 1, babies["race_of_head"], 9)
-    babies["race"] = babies["race_id"].map(
-        {
-            1: "white",
-            2: "black",
-            3: "other",
-            4: "other",
-            5: "other",
-            6: "other",
-            7: "other",
-            8: "other",
-            9: "other",
-        }
-    )
-    babies = (
-        babies.reset_index()
-        .merge(
-            heads[["hispanic", "hispanic.1", "p_hispanic", "household_id"]],
-            on="household_id",
-        )
-        .set_index("person_id")
-    )
+    newborns.index += highest_index + 1
+    newborns.index.name = "person_id"
 
     # Add counter for member_id to not overlap from dead people for households
     if not grave.empty:
@@ -1080,29 +1074,73 @@ def update_birth(persons, households, birth_list):
         all_people = persons_df[["member_id", "household_id"]]
     max_member_id = all_people.groupby("household_id").agg({"member_id": "max"})
     max_member_id += 1
-    babies = (
-        babies.reset_index()
+
+    newborns = (
+        newborns.reset_index()
         .merge(max_member_id, left_on="household_id", right_index=True)
         .set_index("person_id")
     )
-    households_babies = households_df.loc[house_indices]
-    households_babies["hh_children"] = "yes"
-    households_babies["persons"] += 1
-    households_babies["gt2"] = np.where(households_babies["persons"] >= 2, 1, 0)
-    households_babies["hh_size"] = np.where(
-        households_babies["persons"] == 1,
+
+    return newborns
+
+
+def update_households(households_df, birth_list):
+    """
+    Update households data frame based on the birth list.
+
+    Args:
+    households_df (DataFrame): The DataFrame containing household data.
+    birth_list (Series): A Series indicating households with new births (1 for birth, 0 otherwise).
+
+    Returns:
+    DataFrame: The updated households DataFrame.
+    """
+    # Find indices of households with new births
+    house_indices = birth_list[birth_list == 1].index
+
+    # Update households with new births
+    households_df.loc[house_indices, 'hh_children'] = 'yes'
+    households_df.loc[house_indices, 'persons'] += 1
+
+    households_df.loc[house_indices, 'gt2'] = np.where(
+        households_df.loc[house_indices, 'persons'] >= 2, 1, 0)
+
+    households_df["hh_size"] = np.where(
+        households_df["persons"] == 1,
         "one",
         np.where(
-            households_babies["persons"] == 2,
+            households_df["persons"] == 2,
             "two",
-            np.where(households_babies["persons"] == 3, "three", "four or more"),
+            np.where(households_df["persons"] == 3, "three", "four or more"),
         ),
     )
 
-    # Update the households table
-    households_df.update(households_babies[households_df.columns])
+    return households_df
+
+def update_birth(persons, households, birth_list):
+    """
+    Update the persons tables with newborns and household sizes
+
+    Args:
+        persons (DataFrameWrapper): DataFrameWrapper of the persons table
+        households (DataFrameWrapper): DataFrameWrapper of the persons table
+        birth_list (pd.Series): Pandas Series of the households with newborns
+
+    Returns:
+        None
+    """
+    persons_df = persons.local
+    households_df = households.local
+    households_columns = households_df.columns
+
+    newborns = initialize_newborns(persons_df, households_df, birth_list)
+
+    newborns = create_newborn_ids(newborns, persons_df)
+
+    households_df = update_households(households_df, birth_list)
+
     # Contactenate the final result
-    combined_result = pd.concat([persons_df, babies])
+    combined_result = pd.concat([persons_df, newborns])
     persons_local_cols = orca.get_injectable("persons_local_cols")
     households_local_cols = orca.get_injectable("households_local_cols")
 
@@ -3479,20 +3517,20 @@ if orca.get_injectable("running_calibration_routine") == False:
                     )
 
     if orca.get_injectable("local_simulation") == True:
-        add_variables = ["add_temp_variables"]
+        # add_variables = ["add_temp_variables"]
         start_of_year_models = ["status_report"]
         demo_models = [
-            "update_age",
-            "laborforce_model",
-            "households_reorg",
-            "kids_moving_model",
-            "fatality_model",
+            # "update_age",
+            # "laborforce_model",
+            # "households_reorg",
+            # "kids_moving_model",
+            # "fatality_model",
             "birth_model",
             "education_model",
             "export_demo_stats",
         ]
         pre_processing_steps = price_models + ["build_networks", "generate_outputs", "update_travel_data"]
-        rem_variables = ["remove_temp_variables"]
+        # rem_variables = ["remove_temp_variables"]
         export_demo_steps = ["export_demo_stats"]
         household_stats = ["household_stats"]
         school_models = ["school_location"]
