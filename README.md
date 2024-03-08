@@ -147,10 +147,14 @@ The configuration files follow the format based on UrbanSim Templates (https://g
 Each configuration file (see here for example) contains a model specification, the input and output tables, along with filtering conditions for input and output subpopulations (e.g.: when models are only applicable to subpopulations, such as the laborforce participation model)
 The DEMOS models specification files are as follows:
 
-1. `demos_birth.yaml`
-2. `demos_mortality.yaml`
-3. `demos_single_to_x.yaml`
-4. `demos_married_to_x.yaml`
+1. `demos_birth_model.yaml`: Configuration of the birth model. (Binary Logit)
+2. `demos_mortality_model.yaml`: Configuration of the mortality model. (Binary Logit)
+3. `demos_single_to_x.yaml`: Configuration of the single to X model. (MNL)
+4. `demos_divorce_model.yaml`: Configuration of the divorce model. (Binary Logit)
+5. `demos_cohabitate_to_x.yaml`: Configuration of the cohabitation to X model. (MNL)
+4. `demos_kids_move_model.yaml`: Configuration of kids moving out model. (Binary Logit)
+5. `demos_edu_model.yaml`: Configuration of the education model. (Binary Logit)
+6. `demos_in_labor_force_model.yaml` and `demos_out_labor_force_model.yaml`: Configurations of the in/out labor force models. (Binary Logit)
 
 
 ### The `data\` directory:
