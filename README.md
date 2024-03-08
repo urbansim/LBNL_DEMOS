@@ -10,7 +10,8 @@ This repository contains code that runs simulations for the DEMOS model suite, a
 - Cohabitation to X Model: simulates changes in partnership status from cohabitating with a partner to getting married or getting divorced
 - Divorce Model: simulates new divorces in the synthetic population each year
 - Kids leaving Household: simulates kids leaving their current households in each year
-- In-Migration/Out-migration models: simulates households/individuals migrating into or out of the area each year
+- In-Migration/Out-migration models: simulate households/individuals migrating into or out of the area each year
+- Laborforce participation models: simulate labor force entry/exit of eligible workers each year
 - Income growth models: simulates income growth for the population in each year
 
 This repository is currently in active development and new updates will be continuously added. For any issues with the current codebase or to suggest improvements, please open an issue or create a separate branch to add your feature and submit pull request for review.
@@ -150,11 +151,20 @@ The main folder of this repository contains several python scripts that contain 
 
 1. The `configs\` directory: this folder contains the different `.yaml` configuration files to run each of the DEMOS and urbansim models. The configuration files for each region are located in subdirectories with the name of the region
 2. The `data\` directory: contains all the data needed to run the simulation
-3. `variables.py`: this script defines all the temporary variables needed to run the models. Each variable is created as an Orca column.
+
+### `variables.py`
+The file variables.py contains Python code defining and creating various types of variables necessary for use within the DEMOS models.
+Each variable is defined as a function and decorated with an ```orca``` column dectorator, associated with agents such as persons and households.
+For example, the following defines a dummy variable indicating whether each person is a female:
+
+```
+@orca.column('persons')
+def gender2(persons):
+    p = persons.to_frame(columns=['sex'])
+    return p.eq(2).astype(int)
+```
+
 4. `datasources.py`: this script imports all the necessary data for the specified simulation region and create simulation output folders, if needed.
 5. `models.py`: this script defines all the models as orca steps and defines all pre-processing and post-processing steps needed for each of the models.
 6. `simulate.py`: this script defines all the simulation parameters and runs the rest of the scripts desribed above.
 7. The `outputs\` directory: contains the different results produced by the simulation. Simulation results for each region are stored in their respective subdirectories.
-
-
-**DETAILED DESCRIPTION OF EACH OF THE SCRIPTS WILL BE ADDED HERE AS THE STRUCTURE IS BEING MODIFIED FOR GENERALIZABILITY**
