@@ -80,11 +80,6 @@ wget https://bayarea-urbansim.s3.us-east-2.amazonaws.com/custom_mpo_06197001_mod
 wget -O bay_area_skims.csv.gz https://beam-outputs.s3.amazonaws.com/output/sfbay/sfbay-smartbaseline-WALK-TAZ-activitySimSkims-allTimePeriods-r5%2Bgh__2021-02-24_21-55-42_gnh/ITERS/it.0/0.activitySimODSkims.UrbanSim.TAZ.Full.csv.gz
 ```
 
-- Austin, Texas Area:
-```
-Links will be added here
-```
-
 6. SKIMS preprocessing
 
 Before running any simulations, it's necessary to preprocess the skims files downloaded in Step 5 for your relevant region. To process the skims file, first activate your environment using the following command:
@@ -94,6 +89,7 @@ conda activate DEMOS_ENV
 
 Access the main DEMOS project folder and running the skims processing file using the following command:
 ```
+cd demos_urbansim
 python process_skims.py
 ```
 
@@ -103,11 +99,6 @@ Before running the simulation, navigate to the project directory and activate th
 
 ```
 conda activate DEMOS
-```
-
-To run a simple simulation of DEMOS for the bay area (region code 06197001) from 2010 to 2020, run the following command:
-```
-python -u simulate.py -c -cf custom -l -r 06197001
 ```
 
 The general command for running the DEMOS simulation is the following:
@@ -142,15 +133,25 @@ This command will direct the software to the correct input data and configuratio
 
 8. Simulation results
 The DEMOS simulation will produce the following sets of data and results:
-  - A synthetic population file showing the evolution of the synthetic population throughout the simulation years. The file should be named `model_data_SCENARIO_NAME_OUTPUT_YEAR.h5`.
-  - Series of aggregated statistics for the population size, number of households, household size distribution, gender distribution, number of births, number of mortalities, number of student enrollments, number of total marriages, number of total divorces, the age distribution of the synthetic population, and income distribution for each simulation year.
+  - A synthetic population file containing the evolved synthetic population throughout the simulation years in `h5` format.
+
+The file can be used to generate summary statistics on population characteristics for each of the simulated years.
 
 ## II. Project Structure
 
 The main folder of this repository contains several python scripts that contain the different steps necessary to import, process, and run the DEMOS framework. The following is a description of the different folder and scripts used to run the DEMOS simulation
 
-1. The `configs\` directory: this folder contains the different `.yaml` configuration files to run each of the DEMOS and urbansim models. The configuration files for each region are located in subdirectories with the name of the region
-2. The `data\` directory: contains all the data needed to run the simulation
+### The `configs\` directory
+The `configs\` directory contains the different `.yaml` configuration files to run each of the DEMOS and urbansim models.
+The configuration files follow the format based on UrbanSim Templates (https://github.com/UDST/urbansim_templates).
+Each configuration file contains a model specification, the input and output tables, along with filtering conditions for input and output subpopulations (e.g.: when models are only applicable to subpopulations, such as the laborforce participation model)
+
+### The `data\` directory:
+This directory contains the different data files needed to run the DEMOS model. Specifically, it includes the following files:
+1. 
+2. 
+3. 
+4. 
 
 ### `variables.py`
 The file variables.py contains Python code defining and creating various types of variables necessary for use within the DEMOS models.
