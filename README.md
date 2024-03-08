@@ -33,7 +33,7 @@ This repository contains only code and configuration/setup files necessary
 python3 setup.py develop
 ```
 
-4. Install dependencies (**WORK IN PROGRESS**)
+4. Install dependencies
 
 The current dependencies installation is based on Unix based systems. Installation instructions for Windows systems will be added later.
 
@@ -144,14 +144,22 @@ The main folder of this repository contains several python scripts that contain 
 ### The `configs\` directory
 The `configs\` directory contains the different `.yaml` configuration files to run each of the DEMOS and urbansim models.
 The configuration files follow the format based on UrbanSim Templates (https://github.com/UDST/urbansim_templates).
-Each configuration file contains a model specification, the input and output tables, along with filtering conditions for input and output subpopulations (e.g.: when models are only applicable to subpopulations, such as the laborforce participation model)
+Each configuration file (see here for example) contains a model specification, the input and output tables, along with filtering conditions for input and output subpopulations (e.g.: when models are only applicable to subpopulations, such as the laborforce participation model)
+The DEMOS models specification files are as follows:
+
+1. `demos_birth.yaml`
+2. `demos_mortality.yaml`
+3. `demos_single_to_x.yaml`
+4. `demos_married_to_x.yaml`
+
 
 ### The `data\` directory:
 This directory contains the different data files needed to run the DEMOS model. Specifically, it includes the following files:
-1. 
-2. 
-3. 
-4. 
+
+1. The input synthetic population for the region, 
+2. Calibration data including observed outcomes between two specific years, with files in this nomenclature: `calibration_xxx_2010_2050.csv`
+3. Post-processing mapping matrix to update household roles when applicable `.csv`
+4. Income growth rates `.csv`
 
 ### `variables.py`
 The file variables.py contains Python code defining and creating various types of variables necessary for use within the DEMOS models.
@@ -164,8 +172,19 @@ def gender2(persons):
     p = persons.to_frame(columns=['sex'])
     return p.eq(2).astype(int)
 ```
+### `datasources.py`:
+This script loads all the necessary data for the simulation, including the input data, models, and calibration data.
 
-4. `datasources.py`: this script imports all the necessary data for the specified simulation region and create simulation output folders, if needed.
-5. `models.py`: this script defines all the models as orca steps and defines all pre-processing and post-processing steps needed for each of the models.
-6. `simulate.py`: this script defines all the simulation parameters and runs the rest of the scripts desribed above.
-7. The `outputs\` directory: contains the different results produced by the simulation. Simulation results for each region are stored in their respective subdirectories.
+### `models.py`:
+   This script defines all the models used in DEMOS, and listed in the beginning of this document. Each model is defined as an `orca` step. In addition to the models, the script contains pre-processing and post-processing functions for the models. Users can use this script to customize which models to run, and in what order. Users can add any new models here. An example of a model is as follows:
+
+```
+@orca.step("education_model")
+def education_model(persons, year):
+```
+
+### `simulate.py`:
+This script defines the simulation pipeline and the simulation parameters for DEMOS.
+
+### `outputs\` directory:
+This directory contains files with aggregate results produced by the simulation. Simulation results for each region are stored in their respective subdirectories.
