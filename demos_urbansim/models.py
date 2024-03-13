@@ -614,37 +614,54 @@ def work_location(persons):
     orca.add_table('work_locations', persons_work.fillna('-1'))
 
 
-@orca.step("school_location")
-def school_location(persons, households, year):
-    """Runs the school location choice/assignment model
-    for grade school students
+@orca.step("school_location_model")
+def school_location_model(persons, households, year):
+    """Assigns students to schools based on their grade level and district.
+
+    This function fetches and processes data from Orca tables to assign
+    students to appropriate schools within their district.
+
     Args:
-        persons (Orca table): Orca table of persons
-        households (Orca table): Orca table of households
-        year (int): simulation year
+        person_table (Orca Table): Orca table containing person data.
+        household_table (Orca Table): Orca table containing household data.
+        year (int): The current year of simulation.
     Returns:
-        Nothing
+        None: Modifies the Orca 'school_locations' table in place.
     """
-    persons_df = orca.get_table("persons").local
-    students_df = utils.extract_students(persons_df)
-    schools_df = orca.get_table("schools").to_frame()
-    blocks_districts = orca.get_table("blocks_districts").to_frame()
-    households_df = orca.get_table("households").local
-    households_df = households_df.reset_index()
-    households_districts = households_df[["household_id", "block_id"]].merge(
-        blocks_districts, left_on="block_id", right_on="GEOID10")
-    students_df = students_df.merge(
-        households_districts.reset_index(), on="household_id")
-    students_df = students_df[students_df["STUDENT_SCHOOL_LEVEL"]==students_df["DET_DIST_TYPE"]].copy()
-    student_groups = utils.create_student_groups(students_df)
+    # Load necessary data from Orca tables
+    person_data = orca.get_table("persons").local
+    school_data = orca.get_table("schools").to_frame()
+    district_data = orca.get_table("blocks_districts").to_frame()
+    household_data = orca.get_table("households").local.reset_index()
 
-    assigned_students_list = utils.assign_schools(student_groups,
-                                            blocks_districts,
-                                            schools_df)
+    # Filter and prepare student data
+    students = utils.extract_students(person_data)
+    
+    # Map households to districts
+    household_district_mapping = household_data[["household_id", "block_id"]].merge(
+        district_data, left_on="block_id", right_on="GEOID10")
 
-    school_assignment_df = utils.create_results_table(students_df, assigned_students_list, year)
+    # Merge students with their respective household districts
+    students_with_districts = students.merge(
+        household_district_mapping.reset_index(), on="household_id")
+    
+    # Filter students based on matching school level and district type
+    eligible_students = students_with_districts[
+        students_with_districts["STUDENT_SCHOOL_LEVEL"] == students_with_districts["DET_DIST_TYPE"]].copy()
 
-    orca.add_table("school_locations", school_assignment_df[["person_id", "school_id"]])
+    # Group students for assignment
+    student_assignment_groups = utils.create_student_groups(eligible_students)
+
+    # Assign students to schools
+    assigned_students = utils.assign_schools(
+        student_assignment_groups, district_data, school_data)
+
+    # Create a table of school assignments
+    school_assignments = utils.create_results_table(
+        eligible_students, assigned_students, year)
+
+    # Update Orca with the new school locations table
+    orca.add_table("school_locations", school_assignments[["person_id", "school_id"]])
 
 @orca.step("work_location_stats")
 def work_location_stats(persons):
@@ -1293,7 +1310,7 @@ if orca.get_injectable("running_calibration_routine") == False:
         pre_processing_steps = price_models + ["build_networks", "generate_outputs", "update_travel_data"]
         export_demo_steps = ["export_demo_stats"]
         household_stats = ["household_stats"]
-        school_models = ["school_location"]
+        school_models = ["school_location_model"]
         end_of_year_models = ["generate_outputs"]
         work_models = ["job_sector", "work_location"]
         mlcm_postprocessing = ["mlcm_postprocessing"]
