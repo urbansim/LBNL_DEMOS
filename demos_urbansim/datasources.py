@@ -463,6 +463,21 @@ except Exception:
         ect = ect.append(df)
 orca.add_table("ect", ect.set_index("year"))
 
+# -----------------------------------------------------------------------------------------
+# ADD JOB SECTOR RATES
+# -----------------------------------------------------------------------------------------
+# EDU_CAT, NUM_WORKERS_CAT is the order of the tuple in the dictionary
+job_sector_rates = {
+    (0, 1): 0.32,
+    (0, 2): 0.25,
+    (1, 1): 0.71,
+    (1, 2): 0.54,
+    (2, 1): 0.9,
+    (2, 2): 0.78,
+    # Add more combinations as needed
+}
+
+orca.add_injectable("job_sector_rates", job_sector_rates)
 
 # -----------------------------------------------------------------------------------------
 # ADD ACTIVITYSIM SKIMS DATA
@@ -617,7 +632,7 @@ calibrated_path = os.path.join(
 if os.path.exists(os.path.join('configs', calibrated_path, skim_source)):
     calibrated_path = os.path.join(calibrated_path, skim_source)
 configs_folder = 'configs/' + calibrated_path if orca.get_injectable('calibrated') else 'estimated_configs'
-marriage_model = read_yaml(configs_folder + "/marriage.yml")
+marriage_model = read_yaml(configs_folder + "/demos_single_to_x_model.yaml")
 orca.add_injectable("marriage_model", marriage_model)
-cohabitation_model = read_yaml(configs_folder + "/cohabitation.yaml")
+cohabitation_model = read_yaml(configs_folder + "/demos_cohabitate_to_x_model.yaml")
 orca.add_injectable("cohabitation_model", cohabitation_model)
