@@ -11,6 +11,47 @@ from urbansim.utils import misc
 
 print('importing variables for region', orca.get_injectable('region_code'))
 
+# -----------------------------------------------------------------------------------------
+# WORK SECTOR
+# -----------------------------------------------------------------------------------------
+@orca.column('persons')
+def num_workers_cat(persons):
+    workers = persons.to_frame(columns=["worker", "household_id"])
+    num_workers = workers.groupby("household_id")["worker"].sum().rename("num_workers").reset_index()
+    workers = workers.merge(num_workers, on=["household_id"])
+    return np.where(workers["num_workers"]==0, 0, np.where(workers["num_workers"]<3, 1, 2))
+
+@orca.column('persons')
+def edu_cat(persons):
+    edu = persons["edu"]
+    return np.where(edu<18, 0, np.where(edu.isin([18, 19, 20]), 1, 2))
+
+
+@orca.column('blocks', 'professional_jobs_capacity', cache=False)
+def professional_jobs_capacity(blocks, jobs):
+    blocks = blocks.local
+    jobs = jobs.local
+    breakpoint()
+    prof_jobs = jobs[jobs["prof_sector"]=="1"].copy()
+
+    prof_jobs = prof_jobs.groupby(["block_id"]).size().rename("prof_jobs_spaces").to_frame()
+
+    blocks = blocks.join(prof_jobs)
+    
+    return blocks["prof_jobs_spaces"].fillna(0)
+
+@orca.column('blocks', 'other_jobs_capacity', cache=False)
+def other_jobs_capacity(blocks, jobs):
+    blocks = blocks.local
+    jobs = jobs.local
+
+    other_jobs = jobs[jobs["prof_sector"]=="0"].copy()
+
+    other_jobs = other_jobs.groupby(["block_id"]).size().rename("other_jobs_spaces").to_frame()
+
+    blocks = blocks.join(other_jobs)
+    
+    return blocks["other_jobs_spaces"].fillna(0)
 
 # -----------------------------------------------------------------------------------------
 # WORK LOCATION CHOICE VARIABLES
