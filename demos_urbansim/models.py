@@ -342,7 +342,7 @@ def laborforce_participation_model(persons, year):
     # Update labor status
     utils.update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year)
 
-@orca.step("birth")
+@orca.step("birth_model")
 def birth_model(persons, households, year):
     """
     Function to run the birth model at the household level.
@@ -355,24 +355,19 @@ def birth_model(persons, households, year):
     Returns:
         None
     """
-    #AUTOGENERATION OF VARIABLE NOT WORKING
-    #REF: https://udst.github.io/urbansim_templates/model-steps.html#binary-logit
 
-    print("HERE")
-    households_df = orca.get_table("households").local
+    households_df = households.local
     households_df["birth"] = -99
     orca.add_table("households", households_df)
-    households_df = orca.get_table("households").local
-    breakpoint()
     persons_df = persons.to_frame(columns=["sex", "age", "household_id", "relate"])
+    
     observed_births = orca.get_table("observed_births_data").to_frame()
     yearly_observed_births = observed_births[observed_births["year"]==year]["count"]
-    print("HERE")
+    
     eligible_households = utils.get_eligible_households(persons_df)
-    breakpoint()
-    print("HERE")
+    
     # Run model
-    birth_model = mm.get_step("birth_model")
+    birth_model = mm.get_step("birth")
     birth_model.filters = "index in " + eligible_households
     birth_model.out_filters = "index in " + eligible_households
 
@@ -384,20 +379,8 @@ def birth_model(persons, households, year):
     utils.update_birth(persons, households, birth_list)
 
     # Updating predictions table
-    btable_df = orca.get_table("btable").to_frame()
-    if btable_df.empty:
-        btable_df = pd.DataFrame.from_dict({
-            "year": [str(year)],
-            "count":  [birth_list.sum()]
-            })
-    else:
-        btable_df_new = pd.DataFrame.from_dict({
-            "year": [str(year)],
-            "count":  [birth_list.sum()]
-            })
+    utils.update_births_table(birth_list, year)
 
-        btable_df = pd.concat([btable_df, btable_df_new], ignore_index=True)
-    orca.add_table("btable", btable_df)
 
 
 @orca.step("kids_moving_model")

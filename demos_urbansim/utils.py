@@ -1375,17 +1375,11 @@ def update_cohabitating_households(persons, households, cohabitate_list):
 
     persons_df = pd.concat([persons_df, leaving_house])
 
-    
+    metadata = update_metadata(metadata, persons_df, households_df)
+
     # add to orca
     orca.add_table("households", households_df[households_local_cols])
     orca.add_table("persons", persons_df[persons_local_cols])
-    metadata = orca.get_table("metadata").to_frame()
-    max_hh_id = metadata.loc["max_hh_id", "value"]
-    max_p_id = metadata.loc["max_p_id", "value"]
-    if households_df.index.max() > max_hh_id:
-        metadata.loc["max_hh_id", "value"] = households_df.index.max()
-    if persons_df.index.max() > max_p_id:
-        metadata.loc["max_p_id", "value"] = persons_df.index.max()
     orca.add_table("metadata", metadata)
 
 def update_divorce(divorce_list):
@@ -1685,8 +1679,7 @@ def update_divorce(divorce_list):
     orca.add_table("divorce_table", divorce_table)
  
 
-
-def initialize_newborns(persons_df, households_df, birth_list):
+def initialize_newborns(persons_df, households_df, birth_list, metadata):
     # Get indices of households with babies
     house_indices = list(birth_list[birth_list == 1].index)
 
@@ -1752,60 +1745,24 @@ def initialize_newborns(persons_df, households_df, birth_list):
         )
     )
 
-    return newborns
-
-def create_newborn_ids(newborns, persons_df):
-    """Function to assign person ids to newborns after
-    birth model
-
-    Args:
-        newborns (pd.DataFrame): Pandas dataframe of the newborns
-        persons_df (pd.DataFrame): Pandas dataframe of the persons data
-
-    Returns:
-        pd.DataFrame: Pandas dataframe of the newborns
-    """
-
-    # Pull max person index from persons table
-    highest_index = persons_df.index.max()
-
-    # Check if the pop_over_time is an empty dataframe
-    grave = orca.get_table("pop_over_time").to_frame()
-
-    # If not empty, update the highest index with max index of all people
-    metadata = orca.get_table("metadata").to_frame()
-
     max_p_id = metadata.loc["max_p_id", "value"]
 
-    highest_index = max(max_p_id, highest_index)
+    highest_index = max(max_p_id, persons_df.index.max())
 
-    # Make sure the index does not overlap with deceased persons
-    if not grave.empty:
-        graveyard = orca.get_table("graveyard")
-        dead_df = graveyard.to_frame(columns=["member_id", "household_id"])
-        highest_dead_index = dead_df.index.max()
-        highest_index = max(highest_dead_index, highest_index)
+    max_member_id = persons_df.groupby("household_id").agg({"member_id": "max"})
+    max_member_id += 1
+    max_member_id = max_member_id.reset_index()
 
     newborns.index += highest_index + 1
     newborns.index.name = "person_id"
 
-    # Add counter for member_id to not overlap from dead people for households
-    if not grave.empty:
-        all_people = pd.concat([grave, persons_df[["member_id", "household_id"]]])
-    else:
-        all_people = persons_df[["member_id", "household_id"]]
-    max_member_id = all_people.groupby("household_id").agg({"member_id": "max"})
-    max_member_id += 1
-
-    newborns = (
-        newborns.reset_index()
-        .merge(max_member_id, left_on="household_id", right_index=True)
-        .set_index("person_id")
-    )
+    newborns = newborns.reset_index()
+    newborns = newborns.merge(max_member_id, on="household_id")
+    newborns = newborns.set_index("person_id")
 
     return newborns
 
-def update_households(households_df, birth_list):
+def update_households_after_birth(households_df, birth_list):
     """
     Update households data frame based on the birth list.
 
@@ -1823,21 +1780,38 @@ def update_households(households_df, birth_list):
     households_df.loc[house_indices, 'hh_children'] = 'yes'
     households_df.loc[house_indices, 'persons'] += 1
 
-    households_df.loc[house_indices, 'gt2'] = np.where(
-        households_df.loc[house_indices, 'persons'] >= 2, 1, 0)
+    households_df["gt2"] = np.where(households_df['persons'] >= 2, 1, 0)
 
-    households_df["hh_size"] = np.where(
-        households_df["persons"] == 1,
-        "one",
-        np.where(
-            households_df["persons"] == 2,
-            "two",
-            np.where(households_df["persons"] == 3, "three", "four or more"),
-        ),
-    )
+    households_df["hh_size"] = np.where(households_df["persons"] == 1, "one",
+                               np.where(households_df["persons"] == 2, "two",
+                               np.where(households_df["persons"] == 3, "three", "four or more")))
 
     return households_df
 
+
+def update_births_table(birth_list, year):
+    """Update the births stats table
+    after the model run.
+
+    Args:
+        birth_list (list): List of birth outcomes
+        year (int): Simulation year
+    """
+    btable_df = orca.get_table("btable").to_frame()
+    if btable_df.empty:
+        btable_df = pd.DataFrame.from_dict({
+            "year": [str(year)],
+            "count":  [birth_list.sum()]
+            })
+    else:
+        btable_df_new = pd.DataFrame.from_dict({
+            "year": [str(year)],
+            "count":  [birth_list.sum()]
+            })
+
+        btable_df = pd.concat([btable_df, btable_df_new], ignore_index=True)
+    
+    orca.add_table("btable", btable_df)
 
 def identify_dead_households(persons_df):
     """Function to identify households with everyone deceased
@@ -2069,8 +2043,6 @@ def rez(group):
     group.relate = group.relate.map(map_func)
     return group
 
-# Function that takes the head's previous role and returns a function
-# that maps roles to new roles based on restructuring
 def create_household_role_mapping(old_role):
     """
     Function that uses the relationship mapping in the
@@ -2082,18 +2054,18 @@ def create_household_role_mapping(old_role):
     # and gives them a new one based on how the 
     # household is restructured
     """
-    sold_role = str(old_role)
+
+    string_old_role = str(old_role)
  
     def inner(role):
         rel_map = orca.get_table("rel_map").to_frame()
         if role == 0:
             new_role = 0
         else:
-            new_role = rel_map.loc[role, sold_role]
+            new_role = rel_map.loc[role, string_old_role]
         return new_role
 
     return inner
-
 
 def update_birth(persons, households, birth_list):
     """
@@ -2109,32 +2081,48 @@ def update_birth(persons, households, birth_list):
     """
     persons_df = persons.local
     households_df = households.local
-    households_columns = households_df.columns
-
-    newborns = utils.initialize_newborns(persons_df, households_df, birth_list)
-
-    newborns = utils.create_newborn_ids(newborns, persons_df)
-
-    households_df = utils.update_households(households_df, birth_list)
-
-    # Contactenate the final result
-    combined_result = pd.concat([persons_df, newborns])
     persons_local_cols = orca.get_injectable("persons_local_cols")
     households_local_cols = orca.get_injectable("households_local_cols")
-
-    orca.add_table("persons", combined_result.loc[:, persons_local_cols])
-    orca.add_table("households", households_df.loc[:, households_local_cols])
     metadata = orca.get_table("metadata").to_frame()
-    max_hh_id = metadata.loc["max_hh_id", "value"]
-    max_p_id = metadata.loc["max_p_id", "value"]
-    if households_df.index.max() > max_hh_id:
-        metadata.loc["max_hh_id", "value"] = households_df.index.max()
-    if combined_result.index.max() > max_p_id:
-        metadata.loc["max_p_id", "value"] = combined_result.index.max()
     
-    orca.add_table("metadata", metadata)
-    # orca.add_injectable("max_p_id", max(highest_index, orca.get_injectable("max_p_id")))
+    newborns = initialize_newborns(persons_df, households_df, birth_list, metadata)
+    persons_df = pd.concat([persons_df, newborns])
 
+    households_df = update_households_after_birth(households_df, birth_list)
+    
+    metadata = update_metadata(metadata, persons_df, households_df)
+
+    orca.add_table("persons", persons_df.loc[:, persons_local_cols])
+    orca.add_table("households", households_df.loc[:, households_local_cols])
+    orca.add_table("metadata", metadata)
+
+
+def update_metadata(metadata, persons_df, households_df):
+    """Function to update the metadata
+    for persons and households indices.
+
+    Args:
+        metadata (pd.DataFrame): Dataframe of the indices metadata
+        persons_df (pd.DataFrame): Dataframe of the persons table
+        households_df (pd.DataFrame): Dataframe of the households table
+
+    Returns:
+        pd.DataFrame: Updated metadata dataframe
+    """
+    metadata_max_households_id = metadata.loc["max_hh_id", "value"]
+    metadata_max_persons_id = metadata.loc["max_p_id", "value"]
+    
+    max_households_id = households_df.index.max()
+    max_person_id = persons_df.index.max()
+
+
+    if max_households_id > metadata_max_households_id:
+        metadata.loc["max_hh_id", "value"] = max_households_id
+    
+    if max_person_id > metadata_max_persons_id:
+        metadata.loc["max_p_id", "value"] = max_person_id
+    
+    return metadata
 
 def extract_students(persons):
     """Retrieve the list of grade school students
