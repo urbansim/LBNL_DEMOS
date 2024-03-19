@@ -241,7 +241,7 @@ def update_age(persons, households):
     Returns:
         None. Updates the Orca tables in place.
     """
-
+    print("AGE")
     persons_df = persons.local
     persons_df["age"] += 1
     households_df = households.to_frame(columns=["age_of_head", "hh_age_of_head"])
@@ -342,7 +342,7 @@ def laborforce_participation_model(persons, year):
     # Update labor status
     utils.update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year)
 
-@orca.step("birth_model")
+@orca.step("birth")
 def birth_model(persons, households, year):
     """
     Function to run the birth model at the household level.
@@ -355,31 +355,35 @@ def birth_model(persons, households, year):
     Returns:
         None
     """
+    #AUTOGENERATION OF VARIABLE NOT WORKING
+    #REF: https://udst.github.io/urbansim_templates/model-steps.html#binary-logit
 
-    households_df = households.local
+    print("HERE")
+    households_df = orca.get_table("households").local
     households_df["birth"] = -99
     orca.add_table("households", households_df)
-    households_df = households.local
+    households_df = orca.get_table("households").local
+    breakpoint()
     persons_df = persons.to_frame(columns=["sex", "age", "household_id", "relate"])
-
-    eligible_households = utils.get_eligible_households(persons_df)
-    # Run model
-    birth = mm.get_step("birth")
-    list_ids = str(eligible_households)
-    birth.filters = "index in " + list_ids
-    birth.out_filters = "index in " + list_ids
-
     observed_births = orca.get_table("observed_births_data").to_frame()
-    target_count = observed_births[observed_births["year"]==year]["count"]
-    
-    birth_list = utils.calibrate_model(birth, target_count)
+    yearly_observed_births = observed_births[observed_births["year"]==year]["count"]
+    print("HERE")
+    eligible_households = utils.get_eligible_households(persons_df)
+    breakpoint()
+    print("HERE")
+    # Run model
+    birth_model = mm.get_step("birth_model")
+    birth_model.filters = "index in " + eligible_households
+    birth_model.out_filters = "index in " + eligible_households
 
-    print(target_count.sum(), " target")
+    birth_list = utils.calibrate_model(birth_model, yearly_observed_births)
+
+    print(yearly_observed_births.sum(), " target")
     print(birth_list.sum(), " predicted")
 
     utils.update_birth(persons, households, birth_list)
 
-    # print("Updating birth metrics...")
+    # Updating predictions table
     btable_df = orca.get_table("btable").to_frame()
     if btable_df.empty:
         btable_df = pd.DataFrame.from_dict({
@@ -1326,9 +1330,9 @@ if orca.get_injectable("running_calibration_routine") == False:
         start_of_year_models = ["status_report"]
         demo_models = [
             "update_age",
-            "laborforce_participation_model",
+            # "laborforce_participation_model",
             # "households_reorg",
-            "kids_moving_model",
+            # "kids_moving_model",
             "fatality_model",
             "birth_model",
             "education_model",
