@@ -105,29 +105,25 @@ def calibrate_model(model, target_count, threshold=0.05):
 
 
 def get_eligible_households(persons_df):
+    """Retrieves the list of eligible households
+    for the birth model.
+
+    Args:
+        persons_df (pd.DataFrame): Table of individual agents
+
+    Returns:
+        str: string representation of eligible households, to be
+        used with UrbanSim Templates
+    """
+
     ELIGIBILITY_COND = (
         (persons_df["sex"] == 2)
         & (persons_df["age"].between(14, 45))
     )
 
-    # Subset of eligible households
     ELIGIBLE_HH = persons_df.loc[ELIGIBILITY_COND, "household_id"].unique()
-    # eligible_hh_df = households_df.loc[ELIGIBLE_HH]
 
-    # btable_elig_df = orca.get_table("btable_elig").to_frame()
-    # if btable_elig_df.empty:
-    #     btable_elig_df = pd.DataFrame.from_dict({
-    #         "year": [str(year)],
-    #         "count":  [ELIGIBLE_HH.shape[0]]
-    #         })
-    # else:
-    #     btable_elig_df_new = pd.DataFrame.from_dict({
-    #         "year": [str(year)],
-    #         "count":  [ELIGIBLE_HH.shape[0]]
-    #         })
-    #     btable_elig_df = pd.concat([btable_elig_df, btable_elig_df_new], ignore_index=True)
-    # orca.add_table("btable_elig", btable_elig_df)
-    return list(ELIGIBLE_HH)
+    return str(list(ELIGIBLE_HH))
 
 def simulation_mnl(data, coeffs):
     """Function to run simulation of the MNL model
@@ -185,7 +181,7 @@ def update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year
 
     # Function to sample income from a normal distribution
     # Sample income for each individual based 
-    on their age and education group
+    # on their age and education group
     persons_df = persons_df.reset_index().merge(income_summary,
                                                 on=['age_group', 'education_group'],
                                                 how='left').set_index("person_id")
