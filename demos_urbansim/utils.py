@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.special import softmax
 import openmatrix as omx
 import orca
 import pandas as pd
@@ -69,7 +70,6 @@ def update_education_status(persons, student_list, year):
     )
     # Others to be added here.
 
-    # Update education levels
     persons_df.update(staying_school)
     persons_df.update(dropping_out)
 
@@ -77,6 +77,18 @@ def update_education_status(persons, student_list, year):
 
 
 def calibrate_model(model, target_count, threshold=0.05):
+    """Function to calibrate a model by adjusting the
+    alternative specific constant
+
+    Args:
+        model (Urbansim Templates object): Urbansim templates object of model
+        target_count (float): Target to calibrate model coefficient to
+        threshold (float, optional): Error threshold for calibration. Defaults to 0.05.
+
+    Returns:
+        pd.Series: predicted outcomes from calibrated model
+    """
+
     model.run()
     predictions = model.choices.astype(int)
     predicted_share = predictions.sum() / predictions.shape[0]
@@ -159,7 +171,7 @@ def update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year
     households_df = orca.get_table("households").local
     households_cols = orca.get_injectable("households_local_cols")
     income_summary = orca.get_table("income_dist").local
-    # breakpoint()
+
     #####################################################
     age_intervals = [0, 20, 30, 40, 50, 65, 900]
     education_intervals = [0, 18, 22, 200]
@@ -172,8 +184,11 @@ def update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year
     #####################################################
 
     # Function to sample income from a normal distribution
-    # Sample income for each individual based on their age and education group
-    persons_df = persons_df.reset_index().merge(income_summary, on=['age_group', 'education_group'], how='left').set_index("person_id")
+    # Sample income for each individual based 
+    on their age and education group
+    persons_df = persons_df.reset_index().merge(income_summary,
+                                                on=['age_group', 'education_group'],
+                                                how='left').set_index("person_id")
     persons_df['new_earning'] = persons_df.apply(lambda row: sample_income(row['mu'], row['sigma']), axis=1)
 
     persons_df["exit_workforce"] = exit_workforce_list
@@ -189,7 +204,8 @@ def update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year
     persons_df["work_at_home"] = persons_df["work_at_home"].fillna(0)
 
     persons_df.loc[persons_df["exit_workforce"]==1, "earning"] = 0
-    persons_df["earning"] = np.where(persons_df["remain_unemployed"]==0, persons_df["new_earning"], persons_df["earning"])
+    persons_df["earning"] = np.where(persons_df["remain_unemployed"]==0,
+                                     persons_df["new_earning"], persons_df["earning"])
 
     # TODO: Similarly, do something for work from home
     agg_households = persons_df.groupby("household_id").agg(
@@ -204,8 +220,6 @@ def update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year
           
     # TODO: Make sure that the actual workers don't get restorted due to difference in indexing
     # TODO: Make sure there is a better way to do this
-    #orca.get_table("households").update_col("workers", agg_households["workers"])
-    #orca.get_table("households").update_col("hh_workers", agg_households["hh_workers"])
     households_df.update(agg_households)
 
     workers = persons_df[persons_df["worker"] == 1]
@@ -1709,6 +1723,7 @@ def initialize_newborns(persons_df, households_df, birth_list):
     newborns["school_zone_id"] = "-1"
     newborns["education_group"] = "lte17"
     newborns["age_group"] = "lte20"
+
     household_races = (
         persons_df.groupby("household_id")
         .agg(num_races=("race_id", "nunique"))
@@ -1744,6 +1759,16 @@ def initialize_newborns(persons_df, households_df, birth_list):
     return newborns
 
 def create_newborn_ids(newborns, persons_df):
+    """Function to assign person ids to newborns after
+    birth model
+
+    Args:
+        newborns (pd.DataFrame): Pandas dataframe of the newborns
+        persons_df (pd.DataFrame): Pandas dataframe of the persons data
+
+    Returns:
+        pd.DataFrame: Pandas dataframe of the newborns
+    """
 
     # Pull max person index from persons table
     highest_index = persons_df.index.max()
@@ -1758,6 +1783,7 @@ def create_newborn_ids(newborns, persons_df):
 
     highest_index = max(max_p_id, highest_index)
 
+    # Make sure the index does not overlap with deceased persons
     if not grave.empty:
         graveyard = orca.get_table("graveyard")
         dead_df = graveyard.to_frame(columns=["member_id", "household_id"])
@@ -1782,8 +1808,6 @@ def create_newborn_ids(newborns, persons_df):
     )
 
     return newborns
-
-
 
 def update_households(households_df, birth_list):
     """
@@ -1819,8 +1843,15 @@ def update_households(households_df, birth_list):
     return households_df
 
 
-
 def identify_dead_households(persons_df):
+    """Function to identify households with everyone deceased
+
+    Args:
+        persons_df (pd.DataFrame): Pandas DataFrame of persons data
+
+    Returns:
+        list: List of household ids where everyone has passed
+    """
     persons_df["member"] = 1
     dead_fraction = persons_df.groupby("household_id").agg(
         num_dead=("dead", "sum"), size=("member", "sum")
