@@ -13,15 +13,14 @@ import orca
 import pandana as pdna
 import pandas as pd
 import stopwatch
+import utils
 import yaml
 from google.cloud import storage
 from scipy.spatial.distance import cdist
-from scipy.special import softmax
 from urbansim.developer import developer
 
 # import demo_models
 from urbansim.models import GrowthRateTransition, transition
-import utils
 
 from urbansim_templates import modelmanager as mm
 from urbansim_templates.models import BinaryLogitStep, OLSRegressionStep
@@ -180,37 +179,54 @@ def fatality_model(persons, households, year):
 @orca.step("update_income")
 def update_income(persons, households, year):
     """
-    Updating income for persons and households
+    Updates the income for both persons and households based on the current year's income rates.
+
+    This function processes person and household data to update personal earnings
+    and total household income according to the latest income rates by county.
 
     Args:
-        persons (DataFrameWrapper): DataFrameWrapper of persons table
-        households (DataFrameWrapper): DataFrameWrapper of households table
-        year (int): simulation year
+        person_table (DataFrameWrapper): Wrapper for the persons table.
+        household_table (DataFrameWrapper): Wrapper for the households table.
+        simulation_year (int): The current year of simulation.
+
+    Returns:
+        None: Directly updates the Orca tables for persons and households.
     """
-    # Pulling data, income rates, and county IDs
-    persons_df = orca.get_table("persons").local
-    households_df = orca.get_table("households").local
+    # Load data from Orca tables
+    person_data = orca.get_table("persons").local
+    person_local_columns = orca.get_injectable("persons_local_cols")
 
-    households_local_cols = households_df.columns
-    persons_local_cols = persons_df.columns
-    hh_counties = households_df["lcm_county_id"].copy()
+    household_data = orca.get_table("households").local
+    household_local_columns = household_data.columns
 
-    income_rates = orca.get_table("income_rates").to_frame()
-    income_rates = income_rates[income_rates["year"] == year]
+    # Load income rate adjustments for the current year
+    annual_income_rates = orca.get_table("income_rates").to_frame()
 
-    persons_df = (persons_df.reset_index().merge(hh_counties.reset_index(), on=["household_id"]).set_index("person_id"))
-    persons_df = (persons_df.reset_index().merge(income_rates, on=["lcm_county_id"]).set_index("person_id"))
-    persons_df["earning"] = persons_df["earning"] * (1 + persons_df["rate"])
+    annual_income_rates = annual_income_rates[annual_income_rates["year"] == year]
 
-    new_incomes = persons_df.groupby("household_id").agg(income=("earning", "sum"))
+    # Prepare county IDs from household data for merging
+    county_ids = household_data[["lcm_county_id"]].copy()
 
-    households_df.update(new_incomes)
-    households_df["income"] = households_df["income"].astype(int)
-    # persons_df["member_id"] = persons_df.groupby("household_id")["relate"].rank(method="first", ascending=True).astype(int)
-    persons_local_columns = orca.get_injectable("persons_local_cols")
-    orca.add_table("persons", persons_df[persons_local_columns])
-    orca.add_table("households", households_df[households_local_cols])
-    orca.add_table("persons", persons_df[persons_local_cols])
+    # Merge person data with household county IDs and income rates
+    person_data = person_data.reset_index().merge(
+        county_ids.reset_index(), on="household_id").set_index("person_id")
+    person_data = person_data.reset_index().merge(
+        annual_income_rates, on="lcm_county_id").set_index("person_id")
+
+    # Update personal earnings based on the county-specific rate
+    person_data["earning"] *= (1 + person_data["rate"])
+
+    # Aggregate new household incomes
+    updated_household_income = person_data.groupby("household_id").agg(
+        total_income=("earning", "sum"))
+
+    # Update household data with new income totals
+    household_data.update(updated_household_income)
+    household_data["income"] = household_data["income"].astype(int)
+
+    # Update Orca tables with modified person and household data
+    orca.add_table("persons", person_data[person_local_columns])
+    orca.add_table("households", household_data[household_local_columns])
 
 @orca.step("update_age")
 def update_age(persons, households):
@@ -223,9 +239,9 @@ def update_age(persons, households):
         households (DataFrameWrapper): DataFrameWrapper of the households table
 
     Returns:
-        None
+        None. Updates the Orca tables in place.
     """
-    # print("Updating age of individuals...")
+
     persons_df = persons.local
     persons_df["age"] += 1
     households_df = households.to_frame(columns=["age_of_head", "hh_age_of_head"])
@@ -270,7 +286,7 @@ def education_model(persons, year):
         persons (DataFrameWrapper): DataFrameWrapper of the persons table
 
     Returns:
-        None
+        None. Updates the Orca persons table.
     """
     # Add temporary variable
     persons_df = persons.local
@@ -288,8 +304,8 @@ def education_model(persons, year):
     orca.get_table("persons").update_col("edu", persons_df["edu"])
     orca.get_table("persons").update_col("student", persons_df["student"])
 
-@orca.step("laborforce_model")
-def laborforce_model(persons, year):
+@orca.step("laborforce_participation_model")
+def laborforce_participation_model(persons, year):
     """
     Run the education model and update the persons table
 
@@ -304,24 +320,24 @@ def laborforce_model(persons, year):
     persons_df["stay_out"] = -99
     persons_df["leaving_workforce"] = -99
     orca.add_table("persons", persons_df)
+    
+    #TODO: DOUBLE CHECK DEFINITIONS HERE
     persons_df = orca.get_table("persons").local
-    
-    input_pop_size = persons_df[(persons_df["worker"]==0) & (persons_df["age"]>=18)].shape[0]
-
     observed_stay_unemployed = orca.get_table("observed_entering_workforce").to_frame()
-    target_count = round(observed_stay_unemployed[observed_stay_unemployed["year"]==year]["share"] * input_pop_size)
-
-    in_workforce_model = mm.get_step("enter_labor_force")
-    stay_unemployed_list = utils.calibrate_model(in_workforce_model, target_count)
-
-    
-    out_workforce_model = mm.get_step("exit_labor_force")
-    
     observed_exit_workforce = orca.get_table("observed_exiting_workforce").to_frame()
-    target_share = observed_exit_workforce[observed_exit_workforce["year"]==year]["share"]
-    target_count = (target_share * input_pop_size)
+    workforce_eligible_count = len(persons_df[(persons_df["worker"]==0) & (persons_df["age"]>=18)])
 
-    exit_workforce_list = utils.calibrate_model(out_workforce_model, target_count)
+    # Entering labor force
+    target_unemployed_yearly_share = observed_stay_unemployed[observed_stay_unemployed["year"]==year]["share"]
+    target_unemployed_yearly_count = round(target_unemployed_yearly_share * target_unemployed_yearly_share)
+    in_workforce_model = mm.get_step("enter_labor_force")
+    stay_unemployed_list = utils.calibrate_model(in_workforce_model, target_unemployed_yearly_count)
+
+    # Exit labor force model
+    target_exit_workforce_yearly_share = observed_exit_workforce[observed_exit_workforce["year"]==year]["share"]
+    target_exit_workforce_yearly_count = round(target_exit_workforce_yearly_share * workforce_eligible_count)
+    out_workforce_model = mm.get_step("exit_labor_force")
+    exit_workforce_list = utils.calibrate_model(out_workforce_model, target_exit_workforce_yearly_count)
     
     # Update labor status
     utils.update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year)
@@ -597,18 +613,12 @@ def work_location(persons):
     Args:
         persons (Orca table): persons orca table
     """
-    # This workaorund is necesary to make the work
-    # location choice run in batches, with improves
-    # simulation efficiency.
     print("Starting professional jobs")
     model = mm.get_step('wlcm_js_prof')
     model.run(chooser_batch_size = 100000)
-    print("Finished professional jobs")
     print("Starting other jobs")
     model = mm.get_step('wlcm_js_other')
     model.run(chooser_batch_size = 100000)   
-    print("Finished other jobs")
-    # Update work locations table of individuals #TODO: evaluate whether to keep or remove
     persons_work = orca.get_table("persons").to_frame(columns=["work_block_id"])
     persons_work = persons_work.reset_index()
     orca.add_table('work_locations', persons_work.fillna('-1'))
@@ -670,6 +680,8 @@ def work_location_stats(persons):
 
     Args:
         persons (Orca table): persons orca table
+    Returns:
+    None. Prints the work location stats
     """
     # Load the 'persons' table into a DataFrame
     persons_df = orca.get_table("persons").to_frame(columns=["work_block_id", "worker"])
@@ -699,6 +711,8 @@ def mlcm_postprocessing(persons):
 
     Args:
         persons (Orca table): Orca table of persons
+    Returns:
+        None. Updates the Orca tables.
     """
     persons_df = orca.get_table("persons").local
     persons_df = persons_df.reset_index()
@@ -897,15 +911,15 @@ def full_transition(
             unique_hh_ids = updated["household_id"].unique()
             persons_old = persons_df[persons_df["household_id"].isin(unique_hh_ids)]
             updated = updated.sort_values(["household_id"])
-            updated["cum_count"] = updated.groupby("household_id").cumcount()
-            updated = updated.sort_values(by=["cum_count"], ascending=False)
+            updated["cumulative_hh_count"] = updated.groupby("household_id").cumcount()
+            updated = updated.sort_values(by=["cumulative_hh_count"], ascending=False)
             updated.loc[:,"new_household_id"] = np.arange(updated.shape[0]) + max_hh_id + 1
-            updated.loc[:,"new_household_id"] = np.where(updated["cum_count"]>0, updated["new_household_id"], updated["household_id"])
+            updated.loc[:,"new_household_id"] = np.where(updated["cumulative_hh_count"]>0, updated["new_household_id"], updated["household_id"])
             sampled_persons = updated.merge(persons_df, how="left", left_on="household_id", right_on="household_id")
-            sampled_persons = sampled_persons.sort_values(by=["cum_count"], ascending=False)
+            sampled_persons = sampled_persons.sort_values(by=["cumulative_hh_count"], ascending=False)
             sampled_persons.loc[:,"new_person_id"] = np.arange(sampled_persons.shape[0]) + max_p_id + 1
-            sampled_persons.loc[:,"person_id"] = np.where(sampled_persons["cum_count"]>0, sampled_persons["new_person_id"], sampled_persons["person_id"])
-            sampled_persons.loc[:,"household_id"] = np.where(sampled_persons["cum_count"]>0, sampled_persons["new_household_id"], sampled_persons["household_id"])
+            sampled_persons.loc[:,"person_id"] = np.where(sampled_persons["cumulative_hh_count"]>0, sampled_persons["new_person_id"], sampled_persons["person_id"])
+            sampled_persons.loc[:,"household_id"] = np.where(sampled_persons["cumulative_hh_count"]>0, sampled_persons["new_household_id"], sampled_persons["household_id"])
             updated.loc[:,"household_id"] = updated.loc[:, "new_household_id"]
             sampled_persons.set_index("person_id", inplace=True, drop=True)
             updated.set_index("household_id", inplace=True, drop=True)
@@ -968,7 +982,6 @@ def simple_transition(
             df["new_idx"] = None
             df.loc[added, "new_idx"] = new_added
             not_added = df["new_idx"].isnull()
-            # breakpoint()
             df.loc[not_added, "new_idx"] = df.loc[not_added].index.values
             df.set_index("new_idx", inplace=True, drop=True)
             df.index.name = idx_name
@@ -1042,9 +1055,23 @@ def update_linked_table(tbl, col_name, added, copied, removed):
 
 @orca.step('households_relocation_basic')
 def households_relocation_basic(households):
+    """
+    Running a household relocation model
+    """
+    #TODO: create injectable for relocation rate
     return simple_relocation(households, .034, "block_id")
 
 def simple_relocation(choosers, relocation_rate, fieldname):
+    """Function to run a simple relocation model for choosers
+    following a certain rate
+
+    Args:
+        choosers (Orca Table): Orca table of the agents deciding to relocate
+        relocation_rate (float): Relocation rate for choosers
+        fieldname (str): Location field
+    Returns:
+    None. Updates the Orca choosers table in place.
+    """
     print("Total agents: %d" % len(choosers))
     print("Total currently unplaced: %d" % choosers[fieldname].value_counts().get("-1", 0))
     print("Assigning for relocation...")
@@ -1299,7 +1326,7 @@ if orca.get_injectable("running_calibration_routine") == False:
         start_of_year_models = ["status_report"]
         demo_models = [
             "update_age",
-            "laborforce_model",
+            "laborforce_participation_model",
             # "households_reorg",
             "kids_moving_model",
             "fatality_model",
