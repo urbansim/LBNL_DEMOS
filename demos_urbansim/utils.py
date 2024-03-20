@@ -220,6 +220,21 @@ def update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year
     households_df.update(agg_households)
 
     workers = persons_df[persons_df["worker"] == 1]
+
+    orca.add_table("persons", persons_df[persons_cols])
+    orca.add_table("households", households_df[households_cols])
+    update_laborforce_stats(persons_df, year)
+
+def update_laborforce_stats(persons_df, year):
+    """Function to update the laborforce entry/exit
+    statistics from laborforce participation model.
+
+    Args:
+        persons_df (pandas.dataframe): Persons table
+        year (int): Simulation year
+    Returns:
+        None.
+    """
     exiting_workforce_df = orca.get_table("exiting_workforce").to_frame()
     entering_workforce_df = orca.get_table("entering_workforce").to_frame()
     if entering_workforce_df.empty:
@@ -244,9 +259,6 @@ def update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year
         
     orca.add_table("entering_workforce", entering_workforce_df)
     orca.add_table("exiting_workforce", exiting_workforce_df)
-    orca.add_table("persons", persons_df[persons_cols])
-    orca.add_table("households", households_df[households_cols])
-
 
 def update_households_after_kids(persons, households, kids_moving):
     """
