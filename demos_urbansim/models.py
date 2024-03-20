@@ -16,7 +16,6 @@ import stopwatch
 import utils
 import yaml
 from google.cloud import storage
-from scipy.spatial.distance import cdist
 from urbansim.developer import developer
 
 # import demo_models
@@ -1313,9 +1312,9 @@ if orca.get_injectable("running_calibration_routine") == False:
         start_of_year_models = ["status_report"]
         demo_models = [
             "update_age",
-            # "laborforce_participation_model",
-            # "households_reorg",
-            # "kids_moving_model",
+            "laborforce_participation_model",
+            "households_reorg",
+            "kids_moving_model",
             "fatality_model",
             "birth_model",
             "education_model",
@@ -1332,9 +1331,9 @@ if orca.get_injectable("running_calibration_routine") == False:
         steps_all_years = (
             start_of_year_models
             + demo_models
-            # + work_models
-            # + school_models
-            # + ["work_location_stats"]
+            + work_models
+            + school_models
+            + ["work_location_stats"]
             + price_models
             + developer_models
             + household_models
