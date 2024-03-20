@@ -13,16 +13,17 @@ import orca
 import pandana as pdna
 import pandas as pd
 import stopwatch
-import utils
 import yaml
 from google.cloud import storage
 from urbansim.developer import developer
 
-# import demo_models
 from urbansim.models import GrowthRateTransition, transition
 
 from urbansim_templates import modelmanager as mm
 from urbansim_templates.models import BinaryLogitStep, OLSRegressionStep
+
+import utils
+import birth_model_utils
 
 # modelmanager.initialize()
 
@@ -363,7 +364,7 @@ def birth_model(persons, households, year):
     observed_births = orca.get_table("observed_births_data").to_frame()
     yearly_observed_births = observed_births[observed_births["year"]==year]["count"]
     
-    eligible_households = utils.get_eligible_households(persons_df)
+    eligible_households = birth_model_utils.get_eligible_households(persons_df)
     
     # Run model
     birth_model = mm.get_step("birth")
@@ -375,10 +376,10 @@ def birth_model(persons, households, year):
     print(yearly_observed_births.sum(), " target")
     print(birth_list.sum(), " predicted")
 
-    utils.update_birth(persons, households, birth_list)
+    birth_model_utils.update_birth(persons, households, birth_list)
 
     # Updating predictions table
-    utils.update_births_table(birth_list, year)
+    birth_model_utils.update_births_table(birth_list, year)
 
 
 
