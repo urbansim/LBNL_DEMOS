@@ -309,7 +309,7 @@ def update_households_after_kids(persons, households, kids_moving):
     
     old_agg_households = aggregate_household_characteristics(persons_df)
 
-    agg_households["hh_type"] = 0  # CHANGE THIS
+    # old_agg_households["hh_type"] = 0  # CHANGE THIS
 
     households_df.update(old_agg_households)
 
@@ -323,8 +323,9 @@ def update_households_after_kids(persons, households, kids_moving):
     agg_households["serialno"] = "-1"
     agg_households["tenure_mover"] = "-1"
     agg_households["block_id"] = "-1"
-
+    agg_households["lcm_county_id"] = "-1"
     agg_households["cars"] = np.random.choice([0, 1, 2], size=agg_households.shape[0])
+    agg_households["divorced"] = -99
 
     agg_households["hh_cars"] = np.where(agg_households["cars"] == 0,"none",
                                 np.where(agg_households["cars"] == 1, "one", "two or more"),)
@@ -381,7 +382,7 @@ def aggregate_household_characteristics(persons_df):
         hispanic_status_of_head=("hispanic_head", "sum"),
         seniors=("senior", "sum"),
         persons=("person", "sum"),
-        gt55=("age_gt55", "sum"),
+        num_gt55=("age_gt55", "sum"),
         children=("child", "sum"),
     )
 
@@ -403,7 +404,7 @@ def aggregate_household_characteristics(persons_df):
     agg_households["hh_workers"] = np.where(agg_households["workers"] == 0, "none",
                                       np.where(agg_households["workers"] == 1, "one", "two or more"))
     agg_households["hh_seniors"] = np.where(agg_households["seniors"] >= 1, "yes", "no")
-    agg_households["gt55"] = np.where(agg_households["age_gt55"] > 0, 1, 0)
+    agg_households["gt55"] = np.where(agg_households["num_gt55"] > 0, 1, 0)
     agg_households["gt2"] = np.where(agg_households["persons"] > 2, 1, 0)
 
     return agg_households
