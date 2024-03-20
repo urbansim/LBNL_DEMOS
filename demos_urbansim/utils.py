@@ -411,30 +411,23 @@ def aggregate_household_characteristics(persons_df):
 
 def fix_erroneous_households(persons, households):
     print("Fixing erroneous households")
-    p_df = persons.local
-    household_cols = households.local_columns
-    household_df = households.local
+    persons_df = persons.local
     persons_cols = persons.local_columns
+    households_df = households.local
+    household_cols = households.local_columns
+    metadata = orca.get_table("metadata").to_frame()
 
-    households_to_drop = p_df[p_df['relate'].isin([1, 13])].groupby('household_id')['relate'].nunique().reset_index()
+    households_to_drop = persons_df[persons_df['relate'].isin([1, 13])].groupby('household_id')['relate'].nunique().reset_index()
     households_to_drop = households_to_drop[households_to_drop["relate"]==2]["household_id"].to_list()
 
-    household_df = household_df.drop(households_to_drop)
-    p_df = p_df[~p_df["household_id"].isin(households_to_drop)]
+    households_df = households_df.drop(households_to_drop)
+    persons_df = persons_df[~persons_df["household_id"].isin(households_to_drop)]
+    
+    metadata = update_metadata(metadata, persons_df, households_df)
 
-    orca.add_table("households", household_df[household_cols])
-    orca.add_table("persons", p_df[persons_cols])
-
-    metadata = orca.get_table("metadata").to_frame()
-    max_hh_id = metadata.loc["max_hh_id", "value"]
-    max_p_id = metadata.loc["max_p_id", "value"]
-    if household_df.index.max() > max_hh_id:
-        metadata.loc["max_hh_id", "value"] = household_df.index.max()
-    if p_df.index.max() > max_p_id:
-        metadata.loc["max_p_id", "value"] = p_df.index.max()
+    orca.add_table("households", households_df[household_cols])
+    orca.add_table("persons", persons_df[persons_cols])
     orca.add_table("metadata", metadata)
-
-
 
 def update_married_households_random(persons, households, marriage_list):
     """
