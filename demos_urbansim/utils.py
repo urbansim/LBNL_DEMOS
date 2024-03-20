@@ -1067,6 +1067,23 @@ def update_cohabitating_households(persons, households, cohabitate_list):
     orca.add_table("persons", persons_df[persons_local_cols])
     orca.add_table("metadata", metadata)
 
+def split_divorced_households(persons_df, households_df, divorce_list):
+    
+    households_df.loc[divorce_list.index, "divorced"] = divorce_list
+    divorced_households = households_df[households_df["divorced"] == 1].copy()
+    divorced_households_ids = divorced_households.index.to_list()
+
+    divorced_persons = persons_df[persons_df["household_id"].isin(divorced_households_ids)].copy()
+
+    divorced_parents = divorced_persons[(divorced_persons["relate"].isin([0, 1])) &\
+                                         (divorced_persons["MAR"] == 1)].copy()
+
+    leaving_house = divorced_parents.groupby("household_id").sample(n=1)
+
+    staying_house = divorced_persons[~(divorced_persons.index.isin(leaving_house.index))].copy()
+    
+    return staying_house, leaving_house
+
 def update_divorce(divorce_list):
     """
     Updating stats for divorced households
@@ -1079,58 +1096,22 @@ def update_divorce(divorce_list):
     Returns:
         None
     """
-    # print("Updating household stats...")
-    households_local_cols = orca.get_table("households").local.columns
-
-    persons_local_cols = orca.get_table("persons").local.columns
 
     households_df = orca.get_table("households").local
+    households_local_cols = orca.get_table("households").local.columns
 
     persons_df = orca.get_table("persons").local
-
-    households_df.loc[divorce_list.index,"divorced"] = divorce_list
-
-    divorce_households = households_df[households_df["divorced"] == 1].copy()
-    DIVORCED_HOUSEHOLDS_ID = divorce_households.index.to_list()
-
-    sizes = persons_df[persons_df["household_id"].isin(divorce_list.index) & (persons_df["relate"].isin([0, 1]))].groupby("household_id").size()
-
-
-    persons_divorce = persons_df[
-        persons_df["household_id"].isin(divorce_households.index)
-    ].copy()
-
-
-    divorced_parents = persons_divorce[
-        (persons_divorce["relate"].isin([0, 1])) & (persons_divorce["MAR"] == 1)
-    ].copy()
-
-    leaving_house = divorced_parents.groupby("household_id").sample(n=1)
-
-    staying_house = persons_divorce[~(persons_divorce.index.isin(leaving_house.index))].copy()
+    persons_local_cols = orca.get_table("persons").local.columns
 
     metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
-    # give the people leaving a new household id, update their marriage status, and other variables
-    leaving_house["relate"] = 0
-    leaving_house["MAR"] = 3
-    leaving_house["member_id"] = 1
-    leaving_house["household_id"] = (
-        np.arange(leaving_house.shape[0]) + max_hh_id + 1
-    )
 
+    staying_house, leaving_house = split_divorced_households(persons_df, households_df, divorce_list)
+    
     # modify necessary variables for members staying in household
-    staying_house["relate"] = np.where(
-        staying_house["relate"].isin([1, 0]), 0, staying_house["relate"]
-    )
-    staying_house["member_id"] = np.where(
-        staying_house["member_id"] != 1,
-        staying_house["member_id"] - 1,
-        staying_house["relate"],
-    )
-    staying_house["MAR"] = np.where(
-        staying_house["MAR"] == 1, 3, staying_house["MAR"]
-    )
+    staying_house["relate"] = np.where(staying_house["relate"].isin([1, 0]), 0, staying_house["relate"])
+    staying_house["member_id"] = np.where(staying_house["member_id"] != 1,staying_house["member_id"] - 1,staying_house["relate"])
+    staying_house["MAR"] = np.where(staying_house["MAR"] == 1, 3, staying_house["MAR"])
 
     # initiate new households with individuals leaving house
     # TODO: DISCUSS ALL THESE INITIALIZATION MEASURES
