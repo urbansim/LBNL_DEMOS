@@ -575,7 +575,8 @@ def update_married_households_random(persons, households, marriage_list):
     metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
     current_max_id = max(max_hh_id, household_df.index.max())
-    final["hh_new_id"] = np.where(final["stay"].isin([1]), final["household_id"], np.where(final["stay"].isin([0]),final["partner_house"],final["new_household_id"] + current_max_id + 1))
+    final["hh_new_id"] = np.where(final["stay"].isin([1]), final["household_id"], 
+                         np.where(final["stay"].isin([0]), final["partner_house"], final["new_household_id"] + current_max_id + 1))
 
     # Households where head left
     household_ids_reorganized = final[(final["stay"] == 0) & (final["relate"] == 0)]["household_id"].unique()
@@ -602,49 +603,41 @@ def update_married_households_random(persons, households, marriage_list):
     p_df["age_gt55"] = np.where(p_df["age"] >= 55, 1, 0)
 
     p_df = p_df.sort_values(by=["household_id", "relate"])
-    household_agg = p_df.groupby("household_id").agg(income=("earning", "sum"),race_of_head=("race_id", "first"),age_of_head=("age", "first"),size=("person", "sum"),workers=("worker", "sum"),hispanic_head=("hispanic_head", "sum"),persons_age_gt55=("age_gt55", "sum"),seniors=("senior", "sum"),children=("child", "sum"),persons=("person", "sum"),)
+
+    household_agg = p_df.groupby("household_id").agg(
+        income=("earning", "sum"),
+        race_of_head=("race_id", "first"),
+        age_of_head=("age", "first"),
+        size=("person", "sum"),
+        workers=("worker", "sum"),
+        hispanic_head=("hispanic_head", "sum"),
+        persons_age_gt55=("age_gt55", "sum"),
+        seniors=("senior", "sum"),
+        children=("child", "sum"),
+        persons=("person", "sum"))
 
     # household_agg["lcm_county_id"] = household_agg["lcm_county_id"]
     household_agg["gt55"] = np.where(household_agg["persons_age_gt55"] > 0, 1, 0)
     household_agg["gt2"] = np.where(household_agg["persons"] > 2, 1, 0)
-    household_agg["hh_workers"] = np.where(household_agg["workers"] == 0,"none",np.where(household_agg["workers"] == 1, "one", "two or more"),)
-    household_agg["hh_age_of_head"] = np.where(household_agg["age_of_head"] < 35,"lt35",np.where(household_agg["age_of_head"] < 65, "gt35-lt65", "gt65"),)
-    household_agg["hh_race_of_head"] = np.where(
-        household_agg["race_of_head"] == 1,
-        "white",
-        np.where(
-            household_agg["race_of_head"] == 2,
-            "black",
-            np.where(household_agg["race_of_head"].isin([6, 7]), "asian", "other"),
-        ),
-    )
-    household_agg["hispanic_head"] = np.where(
-        household_agg["hispanic_head"] == 1, "yes", "no"
-    )
-    household_agg["hh_size"] = np.where(
-        household_agg["size"] == 1,
-        "one",
-        np.where(
-            household_agg["size"] == 2,
-            "two",
-            np.where(household_agg["size"] == 3, "three", "four or more"),
-        ),
-    )
+    household_agg["hh_workers"] = np.where(household_agg["workers"] == 0, "none",
+                                  np.where(household_agg["workers"] == 1, "one", "two or more"))
+    
+    household_agg["hh_age_of_head"] = np.where(household_agg["age_of_head"] < 35, "lt35",
+                                      np.where(household_agg["age_of_head"] < 65, "gt35-lt65", "gt65"))
+    
+    household_agg["hh_race_of_head"] = np.where(household_agg["race_of_head"] == 1, "white",
+                                       np.where(household_agg["race_of_head"] == 2, "black",
+                                       np.where(household_agg["race_of_head"].isin([6, 7]), "asian", "other")))
+    household_agg["hispanic_head"] = np.where(household_agg["hispanic_head"] == 1, "yes", "no")
+    household_agg["hh_size"] = np.where(household_agg["size"] == 1, "one",
+                               np.where(household_agg["size"] == 2, "two",
+                               np.where(household_agg["size"] == 3, "three", "four or more")))
     household_agg["hh_children"] = np.where(household_agg["children"] >= 1, "yes", "no")
     household_agg["hh_seniors"] = np.where(household_agg["seniors"] >= 1, "yes", "no")
-    household_agg["hh_income"] = np.where(
-        household_agg["income"] < 30000,
-        "lt30",
-        np.where(
-            household_agg["income"] < 60,
-            "gt30-lt60",
-            np.where(
-                household_agg["income"] < 100,
-                "gt60-lt100",
-                np.where(household_agg["income"] < 150, "gt100-lt150", "gt150"),
-            ),
-        ),
-    )
+    household_agg["hh_income"] = np.where(household_agg["income"] < 30000, "lt30",
+                                 np.where(household_agg["income"] < 60, "gt30-lt60",
+                                 np.where(household_agg["income"] < 100, "gt60-lt100",
+                                 np.where(household_agg["income"] < 150, "gt100-lt150", "gt150"))))
 
     household_df.update(household_agg)
 
@@ -659,9 +652,8 @@ def update_married_households_random(persons, households, marriage_list):
     new_hh["tenure"] = "-1"
     new_hh["recent_mover"] = "-1"
     new_hh["sf_detached"] = "-1"
-    new_hh["hh_cars"] = np.where(
-        new_hh["cars"] == 0, "none", np.where(new_hh["cars"] == 1, "one", "two or more")
-    )
+    new_hh["hh_cars"] = np.where(new_hh["cars"] == 0, "none", 
+                        np.where(new_hh["cars"] == 1, "one", "two or more"))
     new_hh["tenure_mover"] = "-1"
     new_hh["block_id"] = "-1"
     new_hh["hh_type"] = "-1"
@@ -676,6 +668,7 @@ def update_married_households_random(persons, households, marriage_list):
     orca.add_table("metadata", metadata)
     
     married_table = orca.get_table("marriage_table").to_frame()
+    
     if married_table.empty:
         married_table = pd.DataFrame(
             [[(marriage_list == 1).sum(), (marriage_list == 2).sum()]],
@@ -778,9 +771,6 @@ def update_married_households(persons, households, marriage_list):
             )
             arg = dist.argmin()
             household_new = pd.DataFrame([female_mar.iloc[index], male_mar.iloc[arg]])
-            # household_new["household_group"] = index + 1
-            # household_new["new_household_id"] = -99
-            # household_new["stay"] = -99
             male_mar = male_mar.drop(male_mar.iloc[arg].name)
             ordered_households = pd.concat([ordered_households, household_new])
 
@@ -814,9 +804,7 @@ def update_married_households(persons, households, marriage_list):
     married["household_group"] = np.repeat(np.arange(len(married.index) / 2), 2)
     cohabitate["household_group"] = np.repeat(np.arange(len(cohabitate.index) / 2), 2)
 
-    married = married.sort_values(
-        by=["household_group", "earning"], ascending=[True, False]
-    )
+    married = married.sort_values(by=["household_group", "earning"], ascending=[True, False])
     cohabitate = cohabitate.sort_values(
         by=["household_group", "earning"], ascending=[True, False]
     )
@@ -890,15 +878,8 @@ def update_married_households(persons, households, marriage_list):
     max_hh_id = metadata.loc["max_hh_id", "value"]
     current_max_id = max(max_hh_id, household_df.index.max())
 
-    final["hh_new_id"] = np.where(
-        final["stay"].isin([1]),
-        final["household_id"],
-        np.where(
-            final["stay"].isin([0]),
-            final["partner_house"],
-            final["new_household_id"] + current_max_id + 1,
-        ),
-    )
+    final["hh_new_id"] = np.where(final["stay"].isin([1]), final["household_id"],
+                         np.where( final["stay"].isin([0]), final["partner_house"], final["new_household_id"] + current_max_id + 1))
 
     # Households where head left
     household_ids_reorganized = final[(final["stay"] == 0) & (final["relate"] == 0)][
@@ -950,52 +931,23 @@ def update_married_households(persons, households, marriage_list):
     household_agg["gt55"] = np.where(household_agg["persons_age_gt55"] > 0, 1, 0)
     household_agg["gt2"] = np.where(household_agg["persons"] > 2, 1, 0)
 
-    household_agg["hh_workers"] = np.where(
-        household_agg["workers"] == 0,
-        "none",
-        np.where(household_agg["workers"] == 1, "one", "two or more"),
-    )
-    household_agg["hh_age_of_head"] = np.where(
-        household_agg["age_of_head"] < 35,
-        "lt35",
-        np.where(household_agg["age_of_head"] < 65, "gt35-lt65", "gt65"),
-    )
-    household_agg["hh_race_of_head"] = np.where(
-        household_agg["race_of_head"] == 1,
-        "white",
-        np.where(
-            household_agg["race_of_head"] == 2,
-            "black",
-            np.where(household_agg["race_of_head"].isin([6, 7]), "asian", "other"),
-        ),
-    )
-    household_agg["hispanic_head"] = np.where(
-        household_agg["hispanic_head"] == 1, "yes", "no"
-    )
-    household_agg["hh_size"] = np.where(
-        household_agg["size"] == 1,
-        "one",
-        np.where(
-            household_agg["size"] == 2,
-            "two",
-            np.where(household_agg["size"] == 3, "three", "four or more"),
-        ),
-    )
+    household_agg["hh_workers"] = np.where(household_agg["workers"] == 0, "none",
+                                  np.where(household_agg["workers"] == 1, "one", "two or more"))
+    household_agg["hh_age_of_head"] = np.where(household_agg["age_of_head"] < 35, "lt35",
+                                      np.where(household_agg["age_of_head"] < 65, "gt35-lt65", "gt65"),)
+    household_agg["hh_race_of_head"] = np.where(household_agg["race_of_head"] == 1, "white",
+                                       np.where(household_agg["race_of_head"] == 2, "black",
+                                       np.where(household_agg["race_of_head"].isin([6, 7]), "asian", "other")))
+    household_agg["hispanic_head"] = np.where(household_agg["hispanic_head"] == 1, "yes", "no")
+    household_agg["hh_size"] = np.where(household_agg["size"] == 1, "one",
+                               np.where(household_agg["size"] == 2, "two",
+                               np.where(household_agg["size"] == 3, "three", "four or more")))
     household_agg["hh_children"] = np.where(household_agg["children"] >= 1, "yes", "no")
     household_agg["hh_seniors"] = np.where(household_agg["seniors"] >= 1, "yes", "no")
-    household_agg["hh_income"] = np.where(
-        household_agg["income"] < 30000,
-        "lt30",
-        np.where(
-            household_agg["income"] < 60,
-            "gt30-lt60",
-            np.where(
-                household_agg["income"] < 100,
-                "gt60-lt100",
-                np.where(household_agg["income"] < 150, "gt100-lt150", "gt150"),
-            ),
-        ),
-    )
+    household_agg["hh_income"] = np.where(household_agg["income"] < 30000, "lt30",
+                                 np.where(household_agg["income"] < 60, "gt30-lt60",
+                                 np.where(household_agg["income"] < 100, "gt60-lt100",
+                                 np.where(household_agg["income"] < 150, "gt100-lt150", "gt150"))))
 
     household_df.update(household_agg)
 
