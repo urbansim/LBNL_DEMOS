@@ -588,8 +588,8 @@ def produce_map_func(old_role):
     return inner
 
 
-@orca.step("update_age")
-def update_age(persons, households):
+@orca.step("aging_model")
+def aging_model(persons, households):
     """
     This function updates the age of the persons table and
     updates the age of the household head in the household table.
@@ -690,7 +690,7 @@ def update_education_status(persons, student_list, year):
 
 
 @orca.step("education_model")
-def education_model(persons):
+def education_model(persons, year):
     """
     Run the education model and update the persons table
 
@@ -3457,7 +3457,7 @@ if orca.get_injectable("running_calibration_routine") == False:
         add_variables = ["add_temp_variables"]
         start_of_year_models = ["status_report"]
         demo_models = [
-            "update_age",
+            "aging_model",
             "laborforce_model",
             "households_reorg",
             "kids_moving_model",
