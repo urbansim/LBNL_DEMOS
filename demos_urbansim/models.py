@@ -16,10 +16,15 @@ import stopwatch
 import yaml
 from google.cloud import storage
 from scipy.spatial.distance import cdist
-from scipy.special import softmax
 from urbansim.developer import developer
-from demos_urbansim.utils import increment_ages, update_education_status
-
+from demos_urbansim.utils import (
+    increment_ages, update_education_status, simulation_mnl, 
+    calibrate_model, 
+    update_birth_eligibility_count_table, 
+    update_births_predictions_table, 
+    get_birth_eligible_households, 
+    update_birth
+)
 
 # import demo_models
 from urbansim.models import GrowthRateTransition, transition
@@ -125,25 +130,6 @@ def build_networks(blocks, block_groups, nodes, edges):
 
     orca.add_injectable("net", net)
 
-
-def simulation_mnl(data, coeffs):
-    """Function to run simulation of the MNL model
-
-    Args:
-        data (_type_): _description_
-        coeffs (_type_): _description_
-
-    Returns:
-        Pandas Series: Pandas Series of the outcomes of the simulated model
-    """
-    utils = np.dot(data, coeffs)
-    base_util = np.zeros(utils.shape[0])
-    utils = np.column_stack((base_util, utils))
-    probabilities = softmax(utils, axis=1)
-    s = probabilities.cumsum(axis=1)
-    r = np.random.rand(probabilities.shape[0]).reshape((-1, 1))
-    choices = (s < r).sum(axis=1)
-    return pd.Series(index=data.index, data=choices)
 
 
 @orca.step("add_temp_variables")
@@ -782,22 +768,6 @@ def update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year
     orca.add_table("persons", persons_df[persons_cols])
     orca.add_table("households", households_df[households_cols])
 
-
-def calibrate_model(model, target_count, threshold=0.05):
-    model.run()
-    predictions = model.choices.astype(int)
-    predicted_share = predictions.sum() / predictions.shape[0]
-    target_share = target_count / predictions.shape[0]
-
-    error = (predictions.sum() - target_count.sum())/target_count.sum()
-    while np.abs(error) >= threshold:
-        model.fitted_parameters[0] += np.log(target_count.sum()/predictions.sum())
-        model.run()
-        predictions = model.choices.astype(int)
-        predicted_share = predictions.sum() / predictions.shape[0]
-        error = (predictions.sum() - target_count.sum())/target_count.sum()
-    return predictions
-
 @orca.step("birth_model")
 def birth_model(persons, households, year):
     """
@@ -813,215 +783,58 @@ def birth_model(persons, households, year):
     """
 
     households_df = households.local
+    households_local_columns = households_df.columns
     households_df["birth"] = -99
     orca.add_table("households", households_df)
     households_df = households.local
-    # persons = orca.get_table('persons')
-    col_subset = ["sex", "age", "household_id", "relate"]
-    persons_df = persons.to_frame(col_subset)
-    
-    ELIGIBILITY_COND = (
-        (persons_df["sex"] == 2)
-        & (persons_df["age"].between(14, 45))
-    )
+    persons_df = persons.local
+    persons_local_columns = persons_df.columns
+    persons_local_columns = orca.get_injectable("persons_local_cols")
+    households_local_columns = orca.get_injectable("households_local_cols")
 
-    # Subset of eligible households
-    ELIGIBLE_HH = persons_df.loc[ELIGIBILITY_COND, "household_id"].unique()
-    eligible_hh_df = households_df.loc[ELIGIBLE_HH]
+    eligible_household_ids = get_birth_eligible_households(persons_df, households_df)
 
     btable_elig_df = orca.get_table("btable_elig").to_frame()
-    if btable_elig_df.empty:
-        btable_elig_df = pd.DataFrame.from_dict({
-            "year": [str(year)],
-            "count":  [ELIGIBLE_HH.shape[0]]
-            })
-    else:
-        btable_elig_df_new = pd.DataFrame.from_dict({
-            "year": [str(year)],
-            "count":  [ELIGIBLE_HH.shape[0]]
-            })
-        btable_elig_df = pd.concat([btable_elig_df, btable_elig_df_new], ignore_index=True)
+    btable_elig_df = update_birth_eligibility_count_table(btable_elig_df, eligible_household_ids, year)
+
     orca.add_table("btable_elig", btable_elig_df)
 
     # Run model
     birth = mm.get_step("birth")
-    list_ids = str(eligible_hh_df.index.to_list())
-    # print(len(eligible_hh_df.index.to_list()))
+    list_ids = str(eligible_household_ids)
     birth.filters = "index in " + list_ids
     birth.out_filters = "index in " + list_ids
 
+    # Calibrate model
     observed_births = orca.get_table("observed_births_data").to_frame()
     target_count = observed_births[observed_births["year"]==year]["count"]
-    
     birth_list = calibrate_model(birth, target_count)
 
     print(target_count.sum(), " target")
     print(birth_list.sum(), " predicted")
 
-    update_birth(persons, households, birth_list)
+    # Update persons and households
+    persons_df, households_df = update_birth(persons_df, households_df, birth_list)
 
-    # print("Updating birth metrics...")
+    # Update births predictions table
     btable_df = orca.get_table("btable").to_frame()
-    if btable_df.empty:
-        btable_df = pd.DataFrame.from_dict({
-            "year": [str(year)],
-            "count":  [birth_list.sum()]
-            })
-    else:
-        btable_df_new = pd.DataFrame.from_dict({
-            "year": [str(year)],
-            "count":  [birth_list.sum()]
-            })
+    btable_df = update_births_predictions_table(btable_df, year, birth_list)
 
-        btable_df = pd.concat([btable_df, btable_df_new], ignore_index=True)
-    orca.add_table("btable", btable_df)
-
-def update_birth(persons, households, birth_list):
-    """
-    Update the persons tables with newborns and household sizes
-
-    Args:
-        persons (DataFrameWrapper): DataFrameWrapper of the persons table
-        households (DataFrameWrapper): DataFrameWrapper of the persons table
-        birth_list (pd.Series): Pandas Series of the households with newborns
-
-    Returns:
-        None
-    """
-    persons_df = persons.local
-    households_df = households.local
-    households_columns = households_df.columns
-
-    # Pull max person index from persons table
-    highest_index = persons_df.index.max()
-
-    # Check if the pop_over_time is an empty dataframe
-    grave = orca.get_table("pop_over_time").to_frame()
-
-    # If not empty, update the highest index with max index of all people
-    metadata = orca.get_table("metadata").to_frame()
-
-    max_p_id = metadata.loc["max_p_id", "value"]
-
-    highest_index = max(max_p_id, highest_index)
-
-    if not grave.empty:
-        graveyard = orca.get_table("graveyard")
-        dead_df = graveyard.to_frame(columns=["member_id", "household_id"])
-        highest_dead_index = dead_df.index.max()
-        highest_index = max(highest_dead_index, highest_index)
-
-    # Get heads of households
-    heads = persons_df[persons_df["relate"] == 0]
-
-    # Get indices of households with babies
-    house_indices = list(birth_list[birth_list == 1].index)
-
-    # Initialize babies variables in the persons table.
-    babies = pd.DataFrame(house_indices, columns=["household_id"])
-    babies.index += highest_index + 1
-    babies.index.name = "person_id"
-    babies["age"] = 0
-    babies["edu"] = 0
-    babies["earning"] = 0
-    babies["hours"] = 0
-    babies["relate"] = 2
-    babies["MAR"] = 5
-    babies["sex"] = np.random.choice([1, 2])
-    babies["student"] = 0
-
-    babies["person_age"] = "19 and under"
-    babies["person_sex"] = babies["sex"].map({1: "male", 2: "female"})
-    babies["child"] = 1
-    babies["senior"] = 0
-    babies["dead"] = -99
-    babies["person"] = 1
-    babies["work_at_home"] = 0
-    babies["worker"] = 0
-    babies["work_block_id"] = "-1"
-    babies["work_zone_id"] = "-1"
-    babies["workplace_taz"] = "-1"
-    babies["school_block_id"] = "-1"
-    babies["school_id"] = "-1"
-    babies["school_taz"] = "-1"
-    babies["school_zone_id"] = "-1"
-    babies["education_group"] = "lte17"
-    babies["age_group"] = "lte20"
-    household_races = (
-        persons_df.groupby("household_id")
-        .agg(num_races=("race_id", "nunique"))
-        .reset_index()
-        .merge(households_df["race_of_head"].reset_index(), on="household_id")
-    )
-    babies = babies.reset_index().merge(household_races, on="household_id")
-    babies["race_id"] = np.where(babies["num_races"] == 1, babies["race_of_head"], 9)
-    babies["race"] = babies["race_id"].map(
-        {
-            1: "white",
-            2: "black",
-            3: "other",
-            4: "other",
-            5: "other",
-            6: "other",
-            7: "other",
-            8: "other",
-            9: "other",
-        }
-    )
-    babies = (
-        babies.reset_index()
-        .merge(
-            heads[["hispanic", "hispanic.1", "p_hispanic", "household_id"]],
-            on="household_id",
-        )
-        .set_index("person_id")
-    )
-
-    # Add counter for member_id to not overlap from dead people for households
-    if not grave.empty:
-        all_people = pd.concat([grave, persons_df[["member_id", "household_id"]]])
-    else:
-        all_people = persons_df[["member_id", "household_id"]]
-    max_member_id = all_people.groupby("household_id").agg({"member_id": "max"})
-    max_member_id += 1
-    babies = (
-        babies.reset_index()
-        .merge(max_member_id, left_on="household_id", right_index=True)
-        .set_index("person_id")
-    )
-    households_babies = households_df.loc[house_indices]
-    households_babies["hh_children"] = "yes"
-    households_babies["persons"] += 1
-    households_babies["gt2"] = np.where(households_babies["persons"] >= 2, 1, 0)
-    households_babies["hh_size"] = np.where(
-        households_babies["persons"] == 1,
-        "one",
-        np.where(
-            households_babies["persons"] == 2,
-            "two",
-            np.where(households_babies["persons"] == 3, "three", "four or more"),
-        ),
-    )
-
-    # Update the households table
-    households_df.update(households_babies[households_df.columns])
-    # Contactenate the final result
-    combined_result = pd.concat([persons_df, babies])
-    persons_local_cols = orca.get_injectable("persons_local_cols")
-    households_local_cols = orca.get_injectable("households_local_cols")
-
-    orca.add_table("persons", combined_result.loc[:, persons_local_cols])
-    orca.add_table("households", households_df.loc[:, households_local_cols])
+    # Update metadata
     metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
     max_p_id = metadata.loc["max_p_id", "value"]
     if households_df.index.max() > max_hh_id:
         metadata.loc["max_hh_id", "value"] = households_df.index.max()
-    if combined_result.index.max() > max_p_id:
-        metadata.loc["max_p_id", "value"] = combined_result.index.max()
-    
+    if persons_df.index.max() > max_p_id:
+        metadata.loc["max_p_id", "value"] = persons_df.index.max()
+
+    # Update tables
+    orca.add_table("persons", persons_df.loc[:, persons_local_columns])
+    orca.add_table("households", households_df.loc[:, households_local_columns])
     orca.add_table("metadata", metadata)
-    # orca.add_injectable("max_p_id", max(highest_index, orca.get_injectable("max_p_id")))
+    orca.add_table("btable", btable_df)
+
 
 def extract_students(persons):
     """Retrieve the list of grade school students

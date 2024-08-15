@@ -1,5 +1,43 @@
 import numpy as np
 import pandas as pd
+from scipy.special import softmax
+
+
+
+def calibrate_model(model, target_count, threshold=0.05):
+    model.run()
+    predictions = model.choices.astype(int)
+    predicted_share = predictions.sum() / predictions.shape[0]
+    target_share = target_count / predictions.shape[0]
+
+    error = (predictions.sum() - target_count.sum())/target_count.sum()
+    while np.abs(error) >= threshold:
+        model.fitted_parameters[0] += np.log(target_count.sum()/predictions.sum())
+        model.run()
+        predictions = model.choices.astype(int)
+        predicted_share = predictions.sum() / predictions.shape[0]
+        error = (predictions.sum() - target_count.sum())/target_count.sum()
+    return predictions
+
+def simulation_mnl(data, coeffs):
+    """Function to run simulation of the MNL model
+
+    Args:
+        data (_type_): _description_
+        coeffs (_type_): _description_
+
+    Returns:
+        Pandas Series: Pandas Series of the outcomes of the simulated model
+    """
+    utils = np.dot(data, coeffs)
+    base_util = np.zeros(utils.shape[0])
+    utils = np.column_stack((base_util, utils))
+    probabilities = softmax(utils, axis=1)
+    s = probabilities.cumsum(axis=1)
+    r = np.random.rand(probabilities.shape[0]).reshape((-1, 1))
+    choices = (s < r).sum(axis=1)
+    return pd.Series(index=data.index, data=choices)
+
 
 def increment_ages(persons_df):
     """
@@ -114,3 +152,176 @@ def update_education_status(persons_df, student_list, year):
     persons_df.update(dropping_out)
 
     return persons_df
+
+
+# -----------------------------------------------------------------------------------------
+# BIRTH TABLE
+# -----------------------------------------------------------------------------------------
+def update_birth_eligibility_count_table(btable_elig_df, eligible_household_ids, year):
+    """
+    Function to update the birth eligibility count table
+    """
+    btable_elig_df_new = pd.DataFrame.from_dict({
+            "year": [str(year)],
+            "count":  [len(eligible_household_ids)]
+            })
+    if btable_elig_df.empty:
+        btable_elig_df = btable_elig_df_new
+    else:
+        btable_elig_df = pd.concat([btable_elig_df, btable_elig_df_new],
+         ignore_index=True)
+    return btable_elig_df
+
+def update_births_predictions_table(births_table, year, birth_list):
+        # print("Updating birth metrics...")
+        btable_df_new = pd.DataFrame.from_dict({
+                "year": [str(year)],
+                "count":  [birth_list.sum()]
+                })
+        if births_table.empty:
+            births_table = btable_df_new
+        else:
+            births_table = pd.concat([births_table, btable_df_new], ignore_index=True)
+        return births_table
+
+def get_birth_eligible_households(persons_df, households_df):
+    ELIGIBILITY_COND = (
+        (persons_df["sex"] == 2)
+        & (persons_df["age"].between(14, 45))
+    )
+
+    # Subset of eligible households
+    ELIGIBLE_HH = persons_df.loc[ELIGIBILITY_COND, "household_id"].unique()
+    eligible_household_ids = households_df.loc[ELIGIBLE_HH].index.to_list()
+    return eligible_household_ids
+
+def update_birth(persons_df, households_df, birth_list):
+    """
+    Update the persons tables with newborns and household sizes
+
+    Args:   
+        persons_df (pd.DataFrame): DataFrame of the persons table
+        households_df (pd.DataFrame): DataFrame of the households table
+        birth_list (pd.Series): Pandas Series of the households with newborns
+
+    Returns:
+        pd.DataFrame: DataFrame of the persons table
+        pd.DataFrame: DataFrame of the households table
+    """
+
+    # Pull max person index from persons table
+    highest_index = persons_df.index.max()
+
+    # Check if the pop_over_time is an empty dataframe
+    grave = orca.get_table("pop_over_time").to_frame()
+
+    # If not empty, update the highest index with max index of all people
+    metadata = orca.get_table("metadata").to_frame()
+
+    max_p_id = metadata.loc["max_p_id", "value"]
+
+    highest_index = max(max_p_id, highest_index)
+
+    if not grave.empty:
+        graveyard = orca.get_table("graveyard")
+        dead_df = graveyard.to_frame(columns=["member_id", "household_id"])
+        highest_dead_index = dead_df.index.max()
+        highest_index = max(highest_dead_index, highest_index)
+
+    # Get heads of households
+    heads = persons_df[persons_df["relate"] == 0]
+
+    # Get indices of households with babies
+    house_indices = list(birth_list[birth_list == 1].index)
+
+    # Initialize babies variables in the persons table.
+    babies = pd.DataFrame(house_indices, columns=["household_id"])
+    babies.index += highest_index + 1
+    babies.index.name = "person_id"
+    babies["age"] = 0
+    babies["edu"] = 0
+    babies["earning"] = 0
+    babies["hours"] = 0
+    babies["relate"] = 2
+    babies["MAR"] = 5
+    babies["sex"] = np.random.choice([1, 2])
+    babies["student"] = 0
+
+    babies["person_age"] = "19 and under"
+    babies["person_sex"] = babies["sex"].map({1: "male", 2: "female"})
+    babies["child"] = 1
+    babies["senior"] = 0
+    babies["dead"] = -99
+    babies["person"] = 1
+    babies["work_at_home"] = 0
+    babies["worker"] = 0
+    babies["work_block_id"] = "-1"
+    babies["work_zone_id"] = "-1"
+    babies["workplace_taz"] = "-1"
+    babies["school_block_id"] = "-1"
+    babies["school_id"] = "-1"
+    babies["school_taz"] = "-1"
+    babies["school_zone_id"] = "-1"
+    babies["education_group"] = "lte17"
+    babies["age_group"] = "lte20"
+    household_races = (
+        persons_df.groupby("household_id")
+        .agg(num_races=("race_id", "nunique"))
+        .reset_index()
+        .merge(households_df["race_of_head"].reset_index(), on="household_id")
+    )
+    babies = babies.reset_index().merge(household_races, on="household_id")
+    babies["race_id"] = np.where(babies["num_races"] == 1, babies["race_of_head"], 9)
+    babies["race"] = babies["race_id"].map(
+        {
+            1: "white",
+            2: "black",
+            3: "other",
+            4: "other",
+            5: "other",
+            6: "other",
+            7: "other",
+            8: "other",
+            9: "other",
+        }
+    )
+    babies = (
+        babies.reset_index()
+        .merge(
+            heads[["hispanic", "hispanic.1", "p_hispanic", "household_id"]],
+            on="household_id",
+        )
+        .set_index("person_id")
+    )
+
+    # Add counter for member_id to not overlap from dead people for households
+    if not grave.empty:
+        all_people = pd.concat([grave, persons_df[["member_id", "household_id"]]])
+    else:
+        all_people = persons_df[["member_id", "household_id"]]
+    max_member_id = all_people.groupby("household_id").agg({"member_id": "max"})
+    max_member_id += 1
+    babies = (
+        babies.reset_index()
+        .merge(max_member_id, left_on="household_id", right_index=True)
+        .set_index("person_id")
+    )
+    households_babies = households_df.loc[house_indices]
+    households_babies["hh_children"] = "yes"
+    households_babies["persons"] += 1
+    households_babies["gt2"] = np.where(households_babies["persons"] >= 2, 1, 0)
+    households_babies["hh_size"] = np.where(
+        households_babies["persons"] == 1,
+        "one",
+        np.where(
+            households_babies["persons"] == 2,
+            "two",
+            np.where(households_babies["persons"] == 3, "three", "four or more"),
+        ),
+    )
+
+    # Update the households table
+    households_df.update(households_babies[households_df.columns])
+    # Contactenate the final result
+    combined_result = pd.concat([persons_df, babies])
+    return combined_result, households_df
