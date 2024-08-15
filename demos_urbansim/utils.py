@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import orca
 from scipy.special import softmax
 
 
@@ -325,3 +326,25 @@ def update_birth(persons_df, households_df, birth_list):
     # Contactenate the final result
     combined_result = pd.concat([persons_df, babies])
     return combined_result, households_df
+
+def update_metadata(metadata, households_df, persons_df):
+    max_hh_id = metadata.loc["max_hh_id", "value"]
+    max_p_id = metadata.loc["max_p_id", "value"]
+    if households_df.index.max() > max_hh_id:
+        metadata.loc["max_hh_id", "value"] = households_df.index.max()
+    if persons_df.index.max() > max_p_id:
+        metadata.loc["max_p_id", "value"] = persons_df.index.max()
+    return metadata
+
+def update_income(persons_df, households_df, income_rates, year):
+    year_income_rate = income_rates[income_rates["year"] == year]
+    hh_counties = households_df["lcm_county_id"].copy()
+    persons_df = (persons_df.reset_index().merge(hh_counties.reset_index(), on=["household_id"]).set_index("person_id"))
+    persons_df = (persons_df.reset_index().merge(year_income_rate, on=["lcm_county_id"]).set_index("person_id"))
+    persons_df["earning"] = persons_df["earning"] * (1 + persons_df["rate"])
+
+    new_incomes = persons_df.groupby("household_id").agg(income=("earning", "sum"))
+
+    households_df.update(new_incomes)
+    households_df["income"] = households_df["income"].astype(int)
+    return persons_df, households_df

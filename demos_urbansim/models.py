@@ -23,7 +23,7 @@ from demos_urbansim.utils import (
     update_birth_eligibility_count_table, 
     update_births_predictions_table, 
     get_birth_eligible_households, 
-    update_birth
+    update_birth, update_metadata, update_income
 )
 
 # import demo_models
@@ -255,40 +255,7 @@ def fatality_model(persons, households, year):
                     if not mortalities_df.empty else mortalities_new_row)
     orca.add_table("mortalities", mortalities_df)
 
-@orca.step("update_income")
-def update_income(persons, households, year):
-    """
-    Updating income for persons and households
 
-    Args:
-        persons (DataFrameWrapper): DataFrameWrapper of persons table
-        households (DataFrameWrapper): DataFrameWrapper of households table
-        year (int): simulation year
-    """
-    # Pulling data, income rates, and county IDs
-    persons_df = orca.get_table("persons").local
-    households_df = orca.get_table("households").local
-
-    households_local_cols = households_df.columns
-    persons_local_cols = persons_df.columns
-    hh_counties = households_df["lcm_county_id"].copy()
-
-    income_rates = orca.get_table("income_rates").to_frame()
-    income_rates = income_rates[income_rates["year"] == year]
-
-    persons_df = (persons_df.reset_index().merge(hh_counties.reset_index(), on=["household_id"]).set_index("person_id"))
-    persons_df = (persons_df.reset_index().merge(income_rates, on=["lcm_county_id"]).set_index("person_id"))
-    persons_df["earning"] = persons_df["earning"] * (1 + persons_df["rate"])
-
-    new_incomes = persons_df.groupby("household_id").agg(income=("earning", "sum"))
-
-    households_df.update(new_incomes)
-    households_df["income"] = households_df["income"].astype(int)
-    # persons_df["member_id"] = persons_df.groupby("household_id")["relate"].rank(method="first", ascending=True).astype(int)
-    persons_local_columns = orca.get_injectable("persons_local_cols")
-    orca.add_table("persons", persons_df[persons_local_columns])
-    orca.add_table("households", households_df[households_local_cols])
-    orca.add_table("persons", persons_df[persons_local_cols])
 
 def identify_dead_households(persons_df):
     persons_df["member"] = 1
@@ -600,6 +567,28 @@ def aging_model(persons, households):
     orca.get_table("persons").update_col("age", persons_df["age"])
 
 
+@orca.step("income_model")
+def income_model(persons, households, year):
+    """
+    Updating income for persons and households
+
+    Args:
+        persons (DataFrameWrapper): DataFrameWrapper of persons table
+        households (DataFrameWrapper): DataFrameWrapper of households table
+        year (int): simulation year
+    """
+    # Pulling data, income rates, and county IDs
+    persons_df = orca.get_table("persons").local
+    households_df = orca.get_table("households").local
+    persons_local_columns = orca.get_injectable("persons_local_cols")
+    households_local_columns = orca.get_injectable("households_local_cols")
+    income_rates = orca.get_table("income_rates").to_frame()
+    
+    persons_df, households_df = update_income(persons_df, households_df, income_rates, year)
+
+    orca.add_table("persons", persons_df[persons_local_columns])
+    orca.add_table("households", households_df[households_local_columns])
+
 @orca.step("education_model")
 def education_model(persons, year):
     """
@@ -783,21 +772,18 @@ def birth_model(persons, households, year):
     """
 
     households_df = households.local
-    households_local_columns = households_df.columns
     households_df["birth"] = -99
     orca.add_table("households", households_df)
     households_df = households.local
     persons_df = persons.local
-    persons_local_columns = persons_df.columns
     persons_local_columns = orca.get_injectable("persons_local_cols")
     households_local_columns = orca.get_injectable("households_local_cols")
+    btable_df = orca.get_table("btable").to_frame()
+    btable_elig_df = orca.get_table("btable_elig").to_frame()
+    metadata = orca.get_table("metadata").to_frame()
 
     eligible_household_ids = get_birth_eligible_households(persons_df, households_df)
-
-    btable_elig_df = orca.get_table("btable_elig").to_frame()
     btable_elig_df = update_birth_eligibility_count_table(btable_elig_df, eligible_household_ids, year)
-
-    orca.add_table("btable_elig", btable_elig_df)
 
     # Run model
     birth = mm.get_step("birth")
@@ -817,22 +803,16 @@ def birth_model(persons, households, year):
     persons_df, households_df = update_birth(persons_df, households_df, birth_list)
 
     # Update births predictions table
-    btable_df = orca.get_table("btable").to_frame()
     btable_df = update_births_predictions_table(btable_df, year, birth_list)
 
     # Update metadata
-    metadata = orca.get_table("metadata").to_frame()
-    max_hh_id = metadata.loc["max_hh_id", "value"]
-    max_p_id = metadata.loc["max_p_id", "value"]
-    if households_df.index.max() > max_hh_id:
-        metadata.loc["max_hh_id", "value"] = households_df.index.max()
-    if persons_df.index.max() > max_p_id:
-        metadata.loc["max_p_id", "value"] = persons_df.index.max()
+    metadata = update_metadata(metadata, households_df, persons_df)
 
     # Update tables
     orca.add_table("persons", persons_df.loc[:, persons_local_columns])
     orca.add_table("households", households_df.loc[:, households_local_columns])
     orca.add_table("metadata", metadata)
+    orca.add_table("btable_elig", btable_elig_df)
     orca.add_table("btable", btable_df)
 
 
@@ -1005,7 +985,6 @@ def kids_moving_model(persons, households):
     kids_moving = kids_moving_model.choices.astype(int)
 
     update_households_after_kids(persons, households, kids_moving)
-
 
 def update_households_after_kids(persons, households, kids_moving):
     """
@@ -1299,7 +1278,6 @@ def update_households_after_kids(persons, households, kids_moving):
                                        new_kids_moving_table],
                                       ignore_index=True)
     orca.add_table("kids_move_table", kids_moving_table)
-
 
 def fix_erroneous_households(persons, households):
     print("Fixing erroneous households")
@@ -2144,7 +2122,6 @@ def update_cohabitating_households(persons, households, cohabitate_list):
     if persons_df.index.max() > max_p_id:
         metadata.loc["max_p_id", "value"] = persons_df.index.max()
     orca.add_table("metadata", metadata)
-
 
 def update_divorce(divorce_list):
     """
@@ -3216,7 +3193,7 @@ if orca.get_injectable("running_calibration_routine") == False:
         end_of_year_models = ["generate_outputs"]
         work_models = ["work_location"]
         mlcm_postprocessing = ["mlcm_postprocessing"]
-        update_income = ["update_income"]
+        income_model = ["income_model"]
         steps_all_years = (
             start_of_year_models
             + demo_models
