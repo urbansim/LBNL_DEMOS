@@ -18,7 +18,7 @@ from google.cloud import storage
 from scipy.spatial.distance import cdist
 from scipy.special import softmax
 from urbansim.developer import developer
-from demos_urbansim.utils import increment_ages
+from demos_urbansim.utils import increment_ages, update_education_status
 
 
 # import demo_models
@@ -614,81 +614,6 @@ def aging_model(persons, households):
     orca.get_table("persons").update_col("age", persons_df["age"])
 
 
-def update_education_status(persons, student_list, year):
-    """
-    Function to update the student status in persons table based
-    on the
-
-    Args:
-        persons (DataFrameWrapper): DataFrameWrapper of the persons table
-        student_list (pd.Series): Pandas Series containing the output of
-        the education model
-
-    Returns:
-        None
-    """
-    # Pull Data
-    persons_df = persons.to_frame(
-        columns=["age", "household_id", "edu", "student", "stop"]
-    )
-    persons_df["stop"] = student_list
-    persons_df["stop"].fillna(2, inplace=True)
-
-    # Update education level for individuals staying in school
-    weights = persons_df["edu"].value_counts(normalize=True)
-
-    persons_df.loc[persons_df["age"] == 3, "edu"] = 2
-    persons_df.loc[persons_df["age"].isin([4, 5]), "edu"] = 4
-
-    dropping_out = persons_df.loc[persons_df["stop"] == 1].copy()
-    staying_school = persons_df.loc[persons_df["stop"] == 0].copy()
-
-    dropping_out.loc[:, "student"] = 0
-    staying_school.loc[:, "student"] = 1
-
-    # high school and high school graduates proportions
-    hs_p = persons_df[persons_df["edu"].isin([15, 16])]["edu"].value_counts(
-        normalize=True
-    )
-    hs_grad_p = persons_df[persons_df["edu"].isin([16, 17])]["edu"].value_counts(
-        normalize=True
-    )
-    # Students all the way to grade 10
-    staying_school.loc[:, "edu"] = np.where(
-        staying_school["edu"].between(4, 13, inclusive="both"),
-        staying_school["edu"] + 1,
-        staying_school["edu"],
-    )
-    # Students in grade 11 move to either 15 or 16 based on weights
-    staying_school.loc[:, "edu"] = np.where(
-        staying_school["edu"] == 14,
-        np.random.choice([15, 16], p=[hs_p[15], hs_p[16]]),
-        staying_school["edu"],
-    )
-    # Students in grade 12 either get hs degree or GED
-    staying_school.loc[:, "edu"] = np.where(
-        staying_school["edu"] == 15,
-        np.random.choice([16, 17], p=[hs_grad_p[16], hs_grad_p[17]]),
-        staying_school["edu"],
-    )
-    # Students with GED or HS Degree move to college
-    staying_school.loc[:, "edu"] = np.where(
-        staying_school["edu"].isin([16, 17]), 18, staying_school["edu"]
-    )
-    # Students with one year of college move to the next
-    staying_school.loc[:, "edu"] = np.where(
-        staying_school["edu"] == 18, 19, staying_school["edu"]
-    )
-    # Others to be added here.
-
-    # Update education levels
-    persons_df.update(staying_school)
-    persons_df.update(dropping_out)
-
-    orca.get_table("persons").update_col("edu", persons_df["edu"])
-    orca.get_table("persons").update_col("student", persons_df["student"])
-
-
 @orca.step("education_model")
 def education_model(persons, year):
     """
@@ -712,7 +637,11 @@ def education_model(persons, year):
     student_list = edu_model.choices.astype(int)
 
     # Update student status
-    update_education_status(persons, student_list, year)
+    persons_df = update_education_status(persons_df, student_list, year)
+
+    # Update the tables with new education values
+    orca.get_table("persons").update_col("edu", persons_df["edu"])
+    orca.get_table("persons").update_col("student", persons_df["student"])
     
 
 @orca.step("laborforce_model")
