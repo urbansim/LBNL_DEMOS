@@ -18,6 +18,8 @@ from google.cloud import storage
 from scipy.spatial.distance import cdist
 from scipy.special import softmax
 from urbansim.developer import developer
+from demos_urbansim.utils import increment_ages
+
 
 # import demo_models
 from urbansim.models import GrowthRateTransition, transition
@@ -597,44 +599,18 @@ def update_age(persons, households):
         households (DataFrameWrapper): DataFrameWrapper of the households table
 
     Returns:
-        None
+        None. Updates the age related columns in the households and persons tables.
     """
-    # print("Updating age of individuals...")
     persons_df = persons.local
-    persons_df["age"] += 1
-    households_df = households.to_frame(columns=["age_of_head", "hh_age_of_head"])
-    households_df["age_of_head"] += 1
-    households_df["hh_age_of_head"] = np.where(
-        households_df["age_of_head"] < 35,
-        "lt35",
-        np.where(households_df["age_of_head"] < 65, "gt35-lt65", "gt65"),
-    )
-    persons_df["child"] = np.where(persons_df["relate"].isin([2, 3, 4, 14]), 1, 0)
-    persons_df["person"] = 1
-    persons_df["senior"] = np.where(persons_df["age"] >= 65, 1, 0)
-    households_stats = persons_df.groupby(["household_id"]).agg(
-        children=("child", "sum"), seniors=("senior", "sum"), size=("person", "sum")
-    )
-    households_stats["hh_children"] = np.where(
-        households_stats["children"] > 0, "yes", "no"
-    )
-    households_stats["gt55"] = np.where(households_stats["seniors"] > 0, 1, 0)
-    households_stats["hh_seniors"] = np.where(
-        households_stats["seniors"] > 0, "yes", "no"
-    )
-    # Update age of household head in household table
-    # print("Updating household and persons tables...")
-    orca.get_table("households").update_col("age_of_head", households_df["age_of_head"])
-    orca.get_table("households").update_col(
-        "hh_age_of_head", households_df["hh_age_of_head"]
-    )
-    orca.get_table("households").update_col(
-        "hh_children", households_stats["hh_children"]
-    )
-    orca.get_table("households").update_col("gt55", households_stats["gt55"])
-    orca.get_table("households").update_col(
-        "hh_seniors", households_stats["hh_seniors"]
-    )
+
+    # Increment the age of the persons table
+    persons_df, households_ages = increment_ages(persons_df)
+
+    # Update age related columns in the households table
+    for column in ["age_of_head", "hh_age_of_head", "hh_children", "gt55", "hh_seniors"]:
+        orca.get_table("households").update_col(column, households_ages[column])
+
+    # Update age in the persons table
     orca.get_table("persons").update_col("age", persons_df["age"])
 
 
@@ -714,15 +690,16 @@ def update_education_status(persons, student_list, year):
 
 
 @orca.step("education_model")
-def education_model(persons, year):
+def education_model(persons):
     """
     Run the education model and update the persons table
 
     Args:
         persons (DataFrameWrapper): DataFrameWrapper of the persons table
+        year (int): Year of the simulation
 
     Returns:
-        None
+        None. Updates the education status of the persons table
     """
     # Add temporary variable
     persons_df = persons.local
@@ -730,13 +707,11 @@ def education_model(persons, year):
     orca.add_table("persons", persons_df)
 
     # Run the education model
-    # print("Running the education model...")
     edu_model = mm.get_step("education")
     edu_model.run()
     student_list = edu_model.choices.astype(int)
 
     # Update student status
-    # print("Updating student status...")
     update_education_status(persons, student_list, year)
     
 
