@@ -23,7 +23,10 @@ from demos_urbansim.utils import (
     update_birth_eligibility_count_table, 
     update_births_predictions_table, 
     get_birth_eligible_households, 
-    update_birth, update_metadata, update_income
+    update_birth, update_metadata, update_income,
+    update_labor_status,
+    update_workforce_stats_tables,
+    aggregate_household_labor_variables,
 )
 
 # import demo_models
@@ -255,8 +258,6 @@ def fatality_model(persons, households, year):
                     if not mortalities_df.empty else mortalities_new_row)
     orca.add_table("mortalities", mortalities_df)
 
-
-
 def identify_dead_households(persons_df):
     persons_df["member"] = 1
     dead_fraction = persons_df.groupby("household_id").agg(
@@ -454,7 +455,6 @@ def remove_dead_persons(persons, households, fatality_list, year):
         metadata.loc["max_p_id", "value"] = persons_df.index.max()
     orca.add_table("metadata", metadata)
 
-
 def rez(group):
     """
     Function to change the household head role
@@ -477,7 +477,6 @@ def rez(group):
     # breakpoint()
     group.relate = group.relate.map(map_func)
     return group
-
 
 # TODO refactor this method so it can be cleanly used with any model
 # Might need to add some stuff (update more variables) or have a flag to determine which function is calling this
@@ -517,7 +516,6 @@ def update_households(alive, dead, old_incomes, subtract=True):
 
     # return households
 
-
 # Function that takes the head's previous role and returns a function
 # that maps roles to new roles based on restructuring
 def produce_map_func(old_role):
@@ -539,7 +537,6 @@ def produce_map_func(old_role):
 
     # Returns function that takes a persons old role and gives them a new one based on how the household is restructured
     return inner
-
 
 @orca.step("aging_model")
 def aging_model(persons, households):
@@ -565,7 +562,6 @@ def aging_model(persons, households):
 
     # Update age in the persons table
     orca.get_table("persons").update_col("age", persons_df["age"])
-
 
 @orca.step("income_model")
 def income_model(persons, households, year):
@@ -618,7 +614,6 @@ def education_model(persons, year):
     orca.get_table("persons").update_col("edu", persons_df["edu"])
     orca.get_table("persons").update_col("student", persons_df["student"])
     
-
 @orca.step("laborforce_model")
 def laborforce_model(persons, year):
     """
@@ -635,125 +630,36 @@ def laborforce_model(persons, year):
     persons_df["stay_out"] = -99
     persons_df["leaving_workforce"] = -99
     orca.add_table("persons", persons_df)
-    persons_df = orca.get_table("persons").local
-    
-    input_pop_size = persons_df[(persons_df["worker"]==0) & (persons_df["age"]>=18)].shape[0]
+    households_df = orca.get_table("households").local
+    income_summary = orca.get_table("income_dist").local
+    persons_cols = orca.get_injectable("persons_local_cols")
+    households_cols = orca.get_injectable("households_local_cols")
+    workforce_stats_df = orca.get_table("workforce_stats").to_frame()
 
+    # get observed data
+    num_unemployed = persons_df[(persons_df["worker"]==0) & (persons_df["age"]>=18)].shape[0]
     observed_stay_unemployed = orca.get_table("observed_entering_workforce").to_frame()
-    target_count = round(observed_stay_unemployed[observed_stay_unemployed["year"]==year]["share"] * input_pop_size)
-
-    in_workforce_model = mm.get_step("enter_labor_force")
-    stay_unemployed_list = calibrate_model(in_workforce_model, target_count)
-
-    
-    out_workforce_model = mm.get_step("exit_labor_force")
-    
+    entering_workforce_share = observed_stay_unemployed[observed_stay_unemployed["year"]==year]["share"]
+    entering_workforce_count = round(entering_workforce_share * num_unemployed)
     observed_exit_workforce = orca.get_table("observed_exiting_workforce").to_frame()
-    target_share = observed_exit_workforce[observed_exit_workforce["year"]==year]["share"]
-    target_count = (target_share * input_pop_size)
+    exiting_workforce_share = observed_exit_workforce[observed_exit_workforce["year"]==year]["share"]
+    exiting_workforce_count = (exiting_workforce_share * num_unemployed)
 
-    exit_workforce_list = calibrate_model(out_workforce_model, target_count)
+    # entering workforce model
+    in_workforce_model = mm.get_step("enter_labor_force")
+    predicted_remain_unemployed = calibrate_model(in_workforce_model, entering_workforce_count)
+
+    # Exiting workforce model
+    out_workforce_model = mm.get_step("exit_labor_force")
+    predicted_exit_workforce = calibrate_model(out_workforce_model, exiting_workforce_count)
     
     # Update labor status
-    update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year)
+    persons_df = update_labor_status(persons_df, predicted_remain_unemployed, predicted_exit_workforce, income_summary)
+    households_df = aggregate_household_labor_variables(persons_df, households_df)
+    workforce_stats_df = update_workforce_stats_tables(workforce_stats_df, persons_df, year)
 
-
-def sample_income(mean, std):
-    return np.random.lognormal(mean, std)
-
-def update_labor_status(persons, stay_unemployed_list, exit_workforce_list, year):
-    """
-    Function to update the worker status in persons table based
-    on the labor participation model
-
-    Args:
-        persons (DataFrameWrapper): DataFrameWrapper of the persons table
-        student_list (pd.Series): Pandas Series containing the output of
-        the education model
-
-    Returns:
-        None
-    """
-    # Pull Data
-    persons_df = orca.get_table("persons").local
-    persons_cols = orca.get_injectable("persons_local_cols")
-    households_df = orca.get_table("households").local
-    households_cols = orca.get_injectable("households_local_cols")
-    income_summary = orca.get_table("income_dist").local
-
-    #####################################################
-    age_intervals = [0, 20, 30, 40, 50, 65, 900]
-    education_intervals = [0, 18, 22, 200]
-    # Define the labels for age and education groups
-    age_labels = ['lte20', '21-29', '30-39', '40-49', '50-64', 'gte65']
-    education_labels = ['lte17', '18-21', 'gte22']
-    # Create age and education groups with labels
-    persons_df['age_group'] = pd.cut(persons_df['age'], bins=age_intervals, labels=age_labels, include_lowest=True)
-    persons_df['education_group'] = pd.cut(persons_df['edu'], bins=education_intervals, labels=education_labels, include_lowest=True)
-    #####################################################
-
-    # Function to sample income from a normal distribution
-    # Sample income for each individual based on their age and education group
-    persons_df = persons_df.reset_index().merge(income_summary, on=['age_group', 'education_group'], how='left').set_index("person_id")
-    persons_df['new_earning'] = persons_df.apply(lambda row: sample_income(row['mu'], row['sigma']), axis=1)
-
-    persons_df["exit_workforce"] = exit_workforce_list
-    persons_df["exit_workforce"].fillna(2, inplace=True)
-
-    persons_df["remain_unemployed"] = stay_unemployed_list
-    persons_df["remain_unemployed"].fillna(2, inplace=True)
-
-    # Update education levels
-    persons_df["worker"] = np.where(persons_df["exit_workforce"]==1, 0, persons_df["worker"])
-    persons_df["worker"] = np.where(persons_df["remain_unemployed"]==0, 1, persons_df["worker"])
-
-    persons_df["work_at_home"] = persons_df["work_at_home"].fillna(0)
-
-    persons_df.loc[persons_df["exit_workforce"]==1, "earning"] = 0
-    persons_df["earning"] = np.where(persons_df["remain_unemployed"]==0, persons_df["new_earning"], persons_df["earning"])
-
-    # TODO: Similarly, do something for work from home
-    agg_households = persons_df.groupby("household_id").agg(
-        sum_workers = ("worker", "sum"),
-        income = ("earning", "sum")
-    )
-    
-    agg_households["hh_workers"] = np.where(
-        agg_households["sum_workers"] == 0,
-        "none",
-        np.where(agg_households["sum_workers"] == 1, "one", "two or more"))
-          
-    # TODO: Make sure that the actual workers don't get restorted due to difference in indexing
-    # TODO: Make sure there is a better way to do this
-    #orca.get_table("households").update_col("workers", agg_households["workers"])
-    #orca.get_table("households").update_col("hh_workers", agg_households["hh_workers"])
-    households_df.update(agg_households)
-
-    workers = persons_df[persons_df["worker"] == 1]
-    exiting_workforce_df = orca.get_table("exiting_workforce").to_frame()
-    entering_workforce_df = orca.get_table("entering_workforce").to_frame()
-    if entering_workforce_df.empty:
-        entering_workforce_df = pd.DataFrame(
-            data={"year": [year], "count": [persons_df[persons_df["remain_unemployed"]==0].shape[0]]}
-        )
-    else:
-        entering_workforce_df_new = pd.DataFrame(
-            data={"year": [year], "count": [persons_df[persons_df["remain_unemployed"]==0].shape[0]]}
-        )
-        entering_workforce_df = pd.concat([entering_workforce_df, entering_workforce_df_new])
-
-    if exiting_workforce_df.empty:
-        exiting_workforce_df = pd.DataFrame(
-            data={"year": [year], "count": [persons_df[persons_df["exit_workforce"]==1].shape[0]]}
-        )
-    else:
-        exiting_workforce_df_new = pd.DataFrame(
-            data={"year": [year], "count": [persons_df[persons_df["exit_workforce"]==1].shape[0]]}
-        )
-        exiting_workforce_df = pd.concat([exiting_workforce_df, exiting_workforce_df_new])
-        
-    orca.add_table("entering_workforce", entering_workforce_df)
-    orca.add_table("exiting_workforce", exiting_workforce_df)
+    # Adding updated tables
+    orca.add_table("workforce_stats", workforce_stats_df)
     orca.add_table("persons", persons_df[persons_cols])
     orca.add_table("households", households_df[households_cols])
 
@@ -766,6 +672,7 @@ def birth_model(persons, households, year):
     Args:
         persons (DataFrameWrapper): DataFrameWrapper of the persons table
         households (DataFrameWrapper): DataFrameWrapper of the households table
+        year (int): simulation year
 
     Returns:
         None
@@ -814,7 +721,6 @@ def birth_model(persons, households, year):
     orca.add_table("metadata", metadata)
     orca.add_table("btable_elig", btable_elig_df)
     orca.add_table("btable", btable_df)
-
 
 def extract_students(persons):
     """Retrieve the list of grade school students

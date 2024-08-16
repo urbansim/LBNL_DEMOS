@@ -348,3 +348,76 @@ def update_income(persons_df, households_df, income_rates, year):
     households_df.update(new_incomes)
     households_df["income"] = households_df["income"].astype(int)
     return persons_df, households_df
+
+def update_workforce_stats_tables(workforce_df, persons_df, year):
+    new_workforce_df = pd.DataFrame(
+            data={"year": [year], "entering_workforce": [persons_df[persons_df["remain_unemployed"]==0].shape[0]],
+            "exiting_workforce": [persons_df[persons_df["exit_workforce"]==1].shape[0]]})
+    if workforce_df.empty:
+        workforce_df = new_workforce_df
+    else:
+        workforce_df = pd.concat([workforce_df, new_workforce_df])
+    return workforce_df
+
+def aggregate_household_labor_variables(persons_df, households_df):
+    # TODO: Similarly, do something for work from home
+    household_incomes = persons_df.groupby("household_id").agg(
+        sum_workers = ("worker", "sum"),
+        income = ("earning", "sum")
+    )
+    
+    household_incomes["hh_workers"] = np.where(
+        household_incomes["sum_workers"] == 0,
+        "none",
+        np.where(household_incomes["sum_workers"] == 1, "one", "two or more"))
+          
+    households_df.update(household_incomes)
+
+    return households_df
+
+def sample_income(mean, std):
+    return np.random.lognormal(mean, std)
+
+def update_labor_status(persons_df, stay_unemployed_list, exit_workforce_list, income_summary):
+    """
+    Function to update the worker status in persons table based
+    on the labor participation model
+
+    Args:
+        persons (DataFrameWrapper): DataFrameWrapper of the persons table
+        student_list (pd.Series): Pandas Series containing the output of
+        the education model
+
+    Returns:
+        None
+    """
+    #####################################################
+    age_intervals = [0, 20, 30, 40, 50, 65, 900]
+    education_intervals = [0, 18, 22, 200]
+    # Define the labels for age and education groups
+    age_labels = ['lte20', '21-29', '30-39', '40-49', '50-64', 'gte65']
+    education_labels = ['lte17', '18-21', 'gte22']
+    # Create age and education groups with labels
+    persons_df['age_group'] = pd.cut(persons_df['age'], bins=age_intervals, labels=age_labels, include_lowest=True)
+    persons_df['education_group'] = pd.cut(persons_df['edu'], bins=education_intervals, labels=education_labels, include_lowest=True)
+    #####################################################
+
+    # Sample income for each individual based on their age and education group
+    persons_df = persons_df.reset_index().merge(income_summary, on=['age_group', 'education_group'], how='left').set_index("person_id")
+    persons_df['new_earning'] = persons_df.apply(lambda row: sample_income(row['mu'], row['sigma']), axis=1)
+
+    persons_df["exit_workforce"] = exit_workforce_list
+    persons_df["exit_workforce"].fillna(2, inplace=True)
+
+    persons_df["remain_unemployed"] = stay_unemployed_list
+    persons_df["remain_unemployed"].fillna(2, inplace=True)
+
+    # Update worker status
+    persons_df["worker"] = np.where(persons_df["exit_workforce"]==1, 0, persons_df["worker"])
+    persons_df["worker"] = np.where(persons_df["remain_unemployed"]==0, 1, persons_df["worker"])
+    persons_df["work_at_home"] = persons_df["work_at_home"].fillna(0)
+
+    persons_df.loc[persons_df["exit_workforce"]==1, "earning"] = 0
+    persons_df["earning"] = np.where(persons_df["remain_unemployed"]==0, persons_df["new_earning"], persons_df["earning"])
+
+    return persons_df
