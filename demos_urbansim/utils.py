@@ -421,3 +421,128 @@ def update_labor_status(persons_df, stay_unemployed_list, exit_workforce_list, i
     persons_df["earning"] = np.where(persons_df["remain_unemployed"]==0, persons_df["new_earning"], persons_df["earning"])
 
     return persons_df
+
+
+def extract_students(persons):
+    """Retrieve the list of grade school students
+
+
+    Args:
+        persons (Orca table): Persons orca table
+
+    Returns:
+        DataFrame: pandas dataframe of grade school students.
+    """
+    edu_levels = np.arange(3, 16).astype(float)
+    STUDENTS_CONDITION = (persons["student"]==1) & (persons["edu"].isin(edu_levels))
+    students_df = persons[STUDENTS_CONDITION].copy()
+    students_df["STUDENT_SCHOOL_LEVEL"] = np.where(
+        students_df["edu"]<=8, "ELEMENTARY",
+        np.where(students_df["edu"]<=11, "MIDDLE", "HIGH"))
+    students_df = students_df.reset_index()
+    return students_df
+
+def create_student_groups(students_df):
+    """Generate a dataframe of students from same
+    household and same grade level
+
+    Args:
+        students_df (DataFrame): grade level students DataFrame
+
+    Returns:
+        DataFrame: grouped students by household and grade level
+    """
+    students_df = students_df[students_df["DET_DIST_TYPE"]==students_df["STUDENT_SCHOOL_LEVEL"]].reset_index(drop=True)
+    student_groups = students_df.groupby(['household_id', 'GEOID10_SD', 'STUDENT_SCHOOL_LEVEL'])['person_id'].apply(list).reset_index(name='students')
+    student_groups["DISTRICT_LEVEL"] = student_groups.apply(lambda row: (row['GEOID10_SD'], row['STUDENT_SCHOOL_LEVEL']), axis=1)
+    student_groups["size_student_group"] = [len(x) for x in student_groups["students"]]
+    student_groups = student_groups.sort_values(by=["GEOID10_SD", "STUDENT_SCHOOL_LEVEL"]).reset_index(drop=True)
+    student_groups["CUM_STUDENTS"] = student_groups.groupby(["GEOID10_SD", "STUDENT_SCHOOL_LEVEL"])["size_student_group"].cumsum()
+    return student_groups
+
+def assign_schools(student_groups, blocks_districts, schools_df):
+    """Assigns students to schools from the same school district
+
+    Args:
+        student_groups (DataFrame): Dataframe of student groups
+        blocks_districts (DataFrame): Dataframe of crosswalk between
+        blocks and school districts
+        schools_df (DataFrame): DataFrame of list of schools in region
+
+    Returns:
+        list: list of assigned students
+    """
+    assigned_students_list = []
+    for tuple in blocks_districts["DISTRICT_LEVEL"].unique():
+        SCHOOL_DISTRICT = tuple[0]
+        SCHOOL_LEVEL = tuple[1]
+        schools_pool = schools_df[(schools_df["SCHOOL_LEVEL"]==SCHOOL_LEVEL) &\
+                                (schools_df["GEOID10_SD"]==SCHOOL_DISTRICT)].copy()
+        student_pool = student_groups[(student_groups["STUDENT_SCHOOL_LEVEL"]==SCHOOL_LEVEL) &\
+                        (student_groups["GEOID10_SD"]==SCHOOL_DISTRICT)].copy()
+        student_pool = student_pool.sample(frac = 1)
+        # Iterate over schools_df
+        for idx, row in schools_pool.iterrows():
+            # Get the pool of students for the district and level of the school
+            SCHOOL_LEVEL = row["SCHOOL_LEVEL"]
+            SCHOOL_DISTRICT = row["GEOID10_SD"]
+            # Calculate the number of students to assign
+            n_students = min(student_pool["size_student_group"].sum(), row['CAP_TOTAL'])
+            student_pool["CUM_STUDENTS"] = student_pool["size_student_group"].cumsum()
+            student_pool["ASSIGNED"] = np.where(student_pool["CUM_STUDENTS"]<=n_students, 1, 0)
+            # Randomly sample students without replacement
+            assigned_students = student_pool[student_pool["CUM_STUDENTS"]<=n_students].copy()
+            assigned_students["SCHOOL_ID"] = row["SCHOOL_ID"]
+            assigned_students_list.append(assigned_students)
+            student_pool = student_pool[student_pool["ASSIGNED"]==0].copy()
+    return assigned_students_list
+
+def create_results_table(students_df, assigned_students_list, year):
+    """Creates table of student assignment
+
+    Args:
+        students_df (DataFrame): students dataframe
+        assigned_students_list (list): student assignment list
+        year (int): year of simulation
+
+    Returns:
+        DataFrame: student assignment dataframe
+    """
+    assigned_students_df = pd.concat(assigned_students_list)[["students", "household_id", "GEOID10_SD", "STUDENT_SCHOOL_LEVEL", "SCHOOL_ID"]]
+    assigned_students_df = assigned_students_df.explode("students").rename(columns={"students": "person_id",
+                                                                                    "SCHOOL_ID": "school_id",})
+    school_assignment_df = students_df[["person_id"]].merge(assigned_students_df[["person_id", "school_id", "GEOID10_SD"]], on="person_id", how='left').fillna("-1")
+    school_assignment_df["year"] = year
+    return school_assignment_df
+
+def export_demo_table(table_name):
+    """
+    Export the tables
+
+    Args:
+        table_name (string): Name of the orca table
+    """
+    
+    region_code = orca.get_injectable("region_code")
+    output_folder = orca.get_injectable("output_folder")
+    df = orca.get_table(table_name).to_frame()
+    csv_name = table_name + "_" + region_code +".csv"
+    df.to_csv(output_folder+csv_name, index=False)
+
+def deduplicate_updated_households(updated, persons_df):
+    unique_hh_ids = updated["household_id"].unique()
+    persons_old = persons_df[persons_df["household_id"].isin(unique_hh_ids)]
+    updated = updated.sort_values(["household_id"])
+    updated["cum_count"] = updated.groupby("household_id").cumcount()
+    updated = updated.sort_values(by=["cum_count"], ascending=False)
+    updated.loc[:,"new_household_id"] = np.arange(updated.shape[0]) + max_hh_id + 1
+    updated.loc[:,"new_household_id"] = np.where(updated["cum_count"]>0, updated["new_household_id"], updated["household_id"])
+    sampled_persons = updated.merge(persons_df, how="left", left_on="household_id", right_on="household_id")
+    sampled_persons = sampled_persons.sort_values(by=["cum_count"], ascending=False)
+    sampled_persons.loc[:,"new_person_id"] = np.arange(sampled_persons.shape[0]) + max_p_id + 1
+    sampled_persons.loc[:,"person_id"] = np.where(sampled_persons["cum_count"]>0, sampled_persons["new_person_id"], sampled_persons["person_id"])
+    sampled_persons.loc[:,"household_id"] = np.where(sampled_persons["cum_count"]>0, sampled_persons["new_household_id"], sampled_persons["household_id"])
+    updated.loc[:,"household_id"] = updated.loc[:, "new_household_id"]
+    sampled_persons.set_index("person_id", inplace=True, drop=True)
+    updated.set_index("household_id", inplace=True, drop=True)
+    return updated, sampled_persons
