@@ -547,8 +547,7 @@ demos_tables = [
     "hhmovein_over_time",
     "student_population",
     "marrital",
-    "exiting_workforce",
-    "entering_workforce",
+    "workforce_stats",
     "school_locations",
     "work_locations"
 ]
@@ -556,16 +555,16 @@ demos_tables = [
 for table in demos_tables:
     orca.add_table(table, pd.DataFrame())
 
-
-# orca.add_injectable("max_p_id", orca.get_table("persons").local.index.max())
-# orca.add_injectable("max_hh_id", orca.get_table("households").local.index.max())
-
+# Add injectables of persons and households local columns
 orca.add_injectable("persons_local_cols", orca.get_table("persons").local.columns)
 orca.add_injectable("households_local_cols", orca.get_table("households").local.columns)
 
+# ------------------------------------------------------------
+# SCHOOL DATA 
+# ------------------------------------------------------------
+# Data needed for school location choice models
 geoid_to_zone = pd.read_csv("data/geoid_to_zone.csv", dtype={"GEOID": str, "zone_id": str})
 geoid_to_zone["GEOID10"] = geoid_to_zone["GEOID"].copy()
-
 blocks_districts = pd.read_csv("data/blocks_school_districts_2010.csv")
 blocks_districts["UNIFIED_DISTRICT"] = np.where(blocks_districts["SCHOOL_DIST_TYPE"]=="UNIFIED", 1, 0)
 blocks_districts["GEOID10"] = ["0"+str(x) for x in blocks_districts["GEOID10_BLOCK"]]
@@ -575,10 +574,6 @@ blocks_districts = blocks_districts.merge(geoid_to_zone, how="left", on=["GEOID1
 blocks_districts = blocks_districts.rename(columns={"zone_id": "school_taz"})
 blocks_districts["school_block_id"] = blocks_districts["GEOID10"].copy()
 
-orca.add_table("blocks_districts", blocks_districts)
-orca.add_table("geoid_to_zone", geoid_to_zone)
-
-
 schools_df = pd.read_csv("data/schools_2010.csv", dtype={"GEOID10": str, "SCHOOL_ID": str})
 schools_df['CAP_TOTAL_INC'] = schools_df['CAP_TOTAL'] * 1.2
 schools_df['REM_CAP'] = schools_df['CAP_TOTAL_INC']
@@ -587,6 +582,8 @@ schools_df["GEOID10_SD"] = ["0"+str(x) for x in schools_df["NCESDist"]]
 schools_df["school_id"] = schools_df["SCHOOL_ID"].copy()
 schools_df = schools_df[~(schools_df["school_id"]=="0000000")].copy()
 
+orca.add_table("blocks_districts", blocks_districts)
+orca.add_table("geoid_to_zone", geoid_to_zone)
 orca.add_table("schools", schools_df)
 
 # -----------------------------------------------------------------------------------------
@@ -601,7 +598,7 @@ else:
 orca.add_injectable("output_folder", output_folder)
 
 # ----------------------------------------------------------------------------------------
-# ADD NONURBANSIM TEMPLATE MODELS
+# ADD NON-URBANSIM TEMPLATE MODELS
 # -----------------------------------------------------------------------------------------
 def read_yaml(path):
     """A function to read YAML file"""
@@ -609,6 +606,7 @@ def read_yaml(path):
         config = list(yaml.safe_load_all(f))[0]
 
     return config
+
 region_code = orca.get_injectable("region_code")
 calibrated_folder = orca.get_injectable("calibrated_folder")
 skim_source = orca.get_injectable("skim_source")
@@ -617,7 +615,9 @@ calibrated_path = os.path.join(
 if os.path.exists(os.path.join('configs', calibrated_path, skim_source)):
     calibrated_path = os.path.join(calibrated_path, skim_source)
 configs_folder = 'configs/' + calibrated_path if orca.get_injectable('calibrated') else 'estimated_configs'
+
 marriage_model = read_yaml(configs_folder + "/marriage.yml")
-orca.add_injectable("marriage_model", marriage_model)
 cohabitation_model = read_yaml(configs_folder + "/cohabitation.yaml")
+
+orca.add_injectable("marriage_model", marriage_model)
 orca.add_injectable("cohabitation_model", cohabitation_model)
