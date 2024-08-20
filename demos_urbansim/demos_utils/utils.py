@@ -623,7 +623,7 @@ def update_households_after_kids(persons_df, households_df, kids_moving, metadat
 
     households_df.update(old_agg_household)
 
-    moving_persons_df, agg_households = aggregate_household_data(persons_df,
+    moving_persons_df, agg_households = aggregate_household_data(moving_persons_df,
     households_df,
     initialize_new_households=True)
 

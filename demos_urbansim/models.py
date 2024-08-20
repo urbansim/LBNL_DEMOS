@@ -231,7 +231,6 @@ def fatality_model(persons, households, year):
     persons_df = orca.get_table("persons").local
     persons_df["dead"] = -99
     orca.add_table("persons", persons_df)
-
     # Retrieve and calibrate the mortality model
     mortality = mm.get_step("mortality")
     observed_fatalities_df = orca.get_table("observed_fatalities_data").to_frame()
@@ -2705,9 +2704,9 @@ if orca.get_injectable("running_calibration_routine") == False:
         start_of_year_models = ["status_report"]
         demo_models = [
             "aging_model",
-            # "laborforce_model",
-            # "households_reorg",
-            # "kids_moving_model",
+            "laborforce_model",
+            "households_reorg",
+            "kids_moving_model",
             "fatality_model",
             "birth_model",
             "education_model",
