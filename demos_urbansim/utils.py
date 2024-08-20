@@ -529,7 +529,9 @@ def export_demo_table(table_name):
     csv_name = table_name + "_" + region_code +".csv"
     df.to_csv(output_folder+csv_name, index=False)
 
-def deduplicate_updated_households(updated, persons_df):
+def deduplicate_updated_households(updated, persons_df, metadata):
+    max_hh_id = metadata.loc["max_hh_id", "value"]
+    max_p_id = metadata.loc["max_p_id", "value"]
     unique_hh_ids = updated["household_id"].unique()
     persons_old = persons_df[persons_df["household_id"].isin(unique_hh_ids)]
     updated = updated.sort_values(["household_id"])
@@ -546,3 +548,218 @@ def deduplicate_updated_households(updated, persons_df):
     sampled_persons.set_index("person_id", inplace=True, drop=True)
     updated.set_index("household_id", inplace=True, drop=True)
     return updated, sampled_persons
+
+
+def update_kids_moving_table(kids_moving_table, kids_moving):
+    """
+    Update the kids_moving_table with the number of kids moving out in the current iteration.
+
+    This function takes the existing kids_moving_table and adds a new row with the count
+    of kids moving out in the current iteration. If the kids_moving_table is empty, it
+    creates a new DataFrame with the current count.
+
+    Args:
+        kids_moving_table (pd.DataFrame): Existing DataFrame containing the history of
+            kids moving out. Can be empty for the first iteration.
+        kids_moving (pd.Series): A boolean Series indicating which kids are moving out
+            in the current iteration.
+
+    Returns:
+        pd.DataFrame: Updated kids_moving_table with a new row added for the current
+            iteration's count of kids moving out.
+    """
+    new_kids_moving_table = pd.DataFrame(
+            {"kids_moving_out": [kids_moving.sum()]}
+        )
+    if kids_moving_table.empty:
+        kids_moving_table = new_kids_moving_table
+    else:
+        kids_moving_table = pd.concat([kids_moving_table, 
+                                    new_kids_moving_table],
+                                    ignore_index=True)
+    return kids_moving_table
+
+
+def update_households_after_kids(persons_df, households_df, kids_moving, metadata):
+    """
+    Add and update households after kids move out.
+
+    Args:
+        persons (DataFrameWrapper): DataFrameWrapper of persons table
+        households (DataFrameWrapper): DataFrameWrapper of households table
+        kids_moving (pd.Series): Pandas Series of kids moving out of household
+
+    Returns:
+        None
+    """
+    # print("Updating households...")
+    persons_df["moveoutkid"] = kids_moving
+    persons_df = persons_df.reset_index()
+    # Add county information to persons_df
+    persons_df = persons_df.merge(
+        households_df[["lcm_county_id"]],
+        left_on="household_id",
+        right_index=True,
+        how="left"
+    )
+    persons_df = persons_df.set_index("person_id")
+
+    # Get max household_id across simulations
+    highest_index = households_df.index.max()
+    max_hh_id = metadata.loc["max_hh_id", "value"]    
+    current_max_household_id = max(max_hh_id, highest_index)
+
+    # kids_leaving_mask = persons_df["moveoutkid"] == 1
+    # households_with_kids_leaving = persons_df.loc[kids_leaving_mask, "household_id"].unique()
+
+    # Aggregate household size and number of kids moving
+    household_moving_stats_df = persons_df.groupby("household_id").agg(
+        household_size=("moveoutkid", "size"),
+        num_moving=("moveoutkid", "sum")
+    )
+
+    # Identify households where all members are marked as moving
+    nonmoving_households = household_moving_stats_df.query("household_size == num_moving").index.unique()
+
+    # Prevent these households from moving out
+    persons_df["moveoutkid"] = np.where(
+        persons_df["household_id"].isin(nonmoving_households),
+        0,
+        persons_df["moveoutkid"])
+    # Assign new household IDs to persons who are actually moving out
+    persons_df.loc[persons_df["moveoutkid"] == 1, "household_id"] = (
+        np.arange(persons_df["moveoutkid"].sum()) + current_max_household_id + 1
+    )
+
+    #new_hh
+    moving_persons_df = persons_df.loc[persons_df["moveoutkid"] == 1].copy()
+
+    persons_df = persons_df.drop(persons_df[persons_df["moveoutkid"] == 1].index)
+
+    persons_df, old_agg_household = aggregate_household_data(persons_df, households_df)
+
+    households_df.update(old_agg_household)
+
+    moving_persons_df, agg_households = aggregate_household_data(persons_df,
+    households_df,
+    initialize_new_households=True)
+
+    households_df["birth"] = -99
+    households_df["divorced"] = -99
+
+    agg_households["birth"] = -99
+    agg_households["divorced"] = -99
+
+    households_df = pd.concat([households_df, agg_households])
+    persons_df = pd.concat([persons_df, moving_persons_df])
+    
+    return persons_df, households_df
+
+
+def aggregate_household_data(persons_df, households_df, initialize_new_households=False):
+    persons_df["person"] = 1
+    persons_df["is_head"] = np.where(persons_df["relate"] == 0, 1, 0)
+    persons_df["race_head"] = persons_df["is_head"] * persons_df["race_id"]
+    persons_df["age_head"] = persons_df["is_head"] * persons_df["age"]
+    persons_df["hispanic_head"] = persons_df["is_head"] * persons_df["hispanic"]
+    persons_df["child"] = np.where(persons_df["relate"].isin([2, 3, 4, 7, 9, 14]), 1, 0)
+    persons_df["senior"] = np.where(persons_df["age"] >= 65, 1, 0)
+    persons_df["age_gt55"] = np.where(persons_df["age"] >= 55, 1, 0)
+        
+    persons_df = persons_df.sort_values("relate")
+
+    agg_dict = {
+        "income": ("earning", "sum"),
+        "race_of_head": ("race_head", "sum"),
+        "age_of_head": ("age_head", "sum"),
+        "workers": ("worker", "sum"),
+        "hispanic_status_of_head": ("hispanic_head", "sum"),
+        "seniors": ("senior", "sum"),
+        "lcm_county_id": ("lcm_county_id", "first"),
+        "persons": ("person", "sum"),
+        "age_gt55": ("age_gt55", "sum"),
+        "children": ("child", "sum"),
+    }
+
+    if initialize_new_households:
+        persons_df["cars"] = np.random.choice([0, 1, 2], size=len(persons_df))
+        agg_dict["cars"] = ("cars", "sum")
+
+    agg_households = persons_df.groupby("household_id").agg(**agg_dict)
+
+    agg_households["hh_age_of_head"] = np.where(
+        agg_households["age_of_head"] < 35,
+        "lt35",
+        np.where(agg_households["age_of_head"] < 65, "gt35-lt65", "gt65"),
+    )
+    agg_households["hh_race_of_head"] = np.where(
+        agg_households["race_of_head"] == 1,
+        "white",
+        np.where(
+            agg_households["race_of_head"] == 2,
+            "black",
+            np.where(agg_households["race_of_head"].isin([6, 7]), "asian", "other"),
+        ),
+    )
+    agg_households["hispanic_head"] = np.where(
+        agg_households["hispanic_status_of_head"] == 1, "yes", "no"
+    )
+    agg_households["hh_size"] = np.where(
+        agg_households["persons"] == 1,
+        "one",
+        np.where(
+            agg_households["persons"] == 2,
+            "two",
+            np.where(agg_households["persons"] == 3, "three", "four or more"),
+        ),
+    )
+    agg_households["hh_children"] = np.where(
+        agg_households["children"] >= 1, "yes", "no"
+    )
+    agg_households["hh_income"] = np.where(
+        agg_households["income"] < 30000,
+        "lt30",
+        np.where(
+            agg_households["income"] < 60,
+            "gt30-lt60",
+            np.where(
+                agg_households["income"] < 100,
+                "gt60-lt100",
+                np.where(agg_households["income"] < 150, "gt100-lt150", "gt150"),
+            ),
+        ),
+    )
+    agg_households["hh_workers"] = np.where(
+        agg_households["workers"] == 0,
+        "none",
+        np.where(agg_households["workers"] == 1, "one", "two or more"),
+    )
+    agg_households["hh_seniors"] = np.where(agg_households["seniors"] >= 1, "yes", "no")
+    agg_households["gt55"] = np.where(agg_households["age_gt55"] > 0, 1, 0)
+    agg_households["gt2"] = np.where(agg_households["persons"] > 2, 1, 0)
+
+    if initialize_new_households:
+        agg_households["hh_cars"] = np.where(
+            agg_households["cars"] == 0,
+            "none",
+            np.where(agg_households["cars"] == 1, "one", "two or more"),
+        )
+        agg_households["serialno"] = "-1"
+        agg_households["tenure"] = np.random.choice(
+            households_df["tenure"].unique(), size=agg_households.shape[0]
+        )
+        agg_households["recent_mover"] = np.random.choice(
+            households_df["recent_mover"].unique(), size=agg_households.shape[0]
+        )
+        agg_households["sf_detached"] = np.random.choice(
+            households_df["sf_detached"].unique(), size=agg_households.shape[0]
+        )
+        agg_households["tenure_mover"] = np.random.choice(
+            households_df["tenure_mover"].unique(), size=agg_households.shape[0]
+        )
+        agg_households["block_id"] = np.random.choice(
+            households_df["block_id"].unique(), size=agg_households.shape[0]
+        )
+        agg_households["hh_type"] = 0
+
+    return persons_df, agg_households
