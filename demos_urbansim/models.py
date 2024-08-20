@@ -17,7 +17,7 @@ import yaml
 from google.cloud import storage
 from scipy.spatial.distance import cdist
 from urbansim.developer import developer
-from demos_urbansim.utils import (
+from demos_urbansim.demos_utils.utils import (
     increment_ages, update_education_status, simulation_mnl, 
     calibrate_model, 
     update_birth_eligibility_count_table, 

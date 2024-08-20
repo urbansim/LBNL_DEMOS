@@ -1,7 +1,7 @@
 import os
 from collections import OrderedDict
 
-import mode_choice
+import demos_utils.mode_choice as mode_choice
 import numpy as np
 import openmatrix as omx
 import orca

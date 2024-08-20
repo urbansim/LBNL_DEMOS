@@ -23,14 +23,10 @@ df = df.set_index(['from_zone_id', 'to_zone_id'])
 store = pd.HDFStore('data/custom_mpo_06197001_model_data.h5')
 store['travel_data'] = df
 
-
-
-
 def correct_index(index_int):
     if type(index_int)==type('string'):
         return index_int
     return '0'+str(index_int)
-
 
 blocks = store['blocks'].copy()
 block_taz = pd.read_csv('data/block_w_taz.csv', dtype={'GEOID10': object, 'taz1454': object})
