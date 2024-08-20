@@ -19,7 +19,6 @@ from scipy.spatial.distance import cdist
 from urbansim.developer import developer
 from demos_urbansim.demos_utils.utils import (
     increment_ages, update_education_status, simulation_mnl, 
-    calibrate_model, 
     update_birth_eligibility_count_table, 
     update_births_predictions_table, 
     get_birth_eligible_households, 
@@ -200,6 +199,23 @@ def household_stats(persons, households):
     print("Households with multiple 1: ", (persons_df_sum["relate_1"] > 1).sum())
     print("Households with multiple 13: ", (persons_df_sum["relate_13"] > 1).sum())
     print("Households with 1 and 13: ", ((persons_df_sum["relate_1"] * persons_df_sum["relate_13"]) > 0).sum())
+
+
+def calibrate_model(model, target_count, threshold=0.05):
+    model.run()
+    predictions = model.choices.astype(int)
+    predicted_share = predictions.sum() / predictions.shape[0]
+    target_share = target_count / predictions.shape[0]
+
+    error = (predictions.sum() - target_count.sum())/target_count.sum()
+    while np.abs(error) >= threshold:
+        model.fitted_parameters[0] += np.log(target_count.sum()/predictions.sum())
+        model.run()
+        predictions = model.choices.astype(int)
+        predicted_share = predictions.sum() / predictions.shape[0]
+        error = (predictions.sum() - target_count.sum())/target_count.sum()
+    return predictions
+
 
 @orca.step("fatality_model")
 def fatality_model(persons, households, year):
@@ -2689,9 +2705,9 @@ if orca.get_injectable("running_calibration_routine") == False:
         start_of_year_models = ["status_report"]
         demo_models = [
             "aging_model",
-            "laborforce_model",
+            # "laborforce_model",
             # "households_reorg",
-            "kids_moving_model",
+            # "kids_moving_model",
             "fatality_model",
             "birth_model",
             "education_model",

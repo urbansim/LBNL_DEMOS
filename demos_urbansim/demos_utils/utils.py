@@ -3,23 +3,6 @@ import pandas as pd
 import orca
 from scipy.special import softmax
 
-
-
-def calibrate_model(model, target_count, threshold=0.05):
-    model.run()
-    predictions = model.choices.astype(int)
-    predicted_share = predictions.sum() / predictions.shape[0]
-    target_share = target_count / predictions.shape[0]
-
-    error = (predictions.sum() - target_count.sum())/target_count.sum()
-    while np.abs(error) >= threshold:
-        model.fitted_parameters[0] += np.log(target_count.sum()/predictions.sum())
-        model.run()
-        predictions = model.choices.astype(int)
-        predicted_share = predictions.sum() / predictions.shape[0]
-        error = (predictions.sum() - target_count.sum())/target_count.sum()
-    return predictions
-
 def simulation_mnl(data, coeffs):
     """Function to run simulation of the MNL model
 
