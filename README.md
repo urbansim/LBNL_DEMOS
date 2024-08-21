@@ -10,7 +10,8 @@ This repository contains code that runs simulations for the DEMOS model suite, a
 - Cohabitation to X Model: simulates changes in partnership status from cohabitating with a partner to getting married or getting divorced
 - Divorce Model: simulates new divorces in the synthetic population each year
 - Kids leaving Household: simulates kids leaving their current households in each year
-- In-Migration/Out-migration models: simulates households/individuals migrating into or out of the area each year
+- In-Migration/Out-migration models: simulate households/individuals migrating into or out of the area each year
+- Laborforce participation models: simulate labor force entry/exit of eligible workers each year
 - Income growth models: simulates income growth for the population in each year
 
 This repository is currently in active development and new updates will be continuously added. For any issues with the current codebase or to suggest improvements, please open an issue or create a separate branch to add your feature and submit pull request for review.
@@ -32,7 +33,7 @@ This repository contains only code and configuration/setup files necessary
 python3 setup.py develop
 ```
 
-4. Install dependencies (**WORK IN PROGRESS**)
+4. Install dependencies
 
 The current dependencies installation is based on Unix based systems. Installation instructions for Windows systems will be added later.
 
@@ -79,11 +80,6 @@ wget https://bayarea-urbansim.s3.us-east-2.amazonaws.com/custom_mpo_06197001_mod
 wget -O bay_area_skims.csv.gz https://beam-outputs.s3.amazonaws.com/output/sfbay/sfbay-smartbaseline-WALK-TAZ-activitySimSkims-allTimePeriods-r5%2Bgh__2021-02-24_21-55-42_gnh/ITERS/it.0/0.activitySimODSkims.UrbanSim.TAZ.Full.csv.gz
 ```
 
-- Austin, Texas Area:
-```
-Links will be added here
-```
-
 6. SKIMS preprocessing
 
 Before running any simulations, it's necessary to preprocess the skims files downloaded in Step 5 for your relevant region. To process the skims file, first activate your environment using the following command:
@@ -93,6 +89,7 @@ conda activate DEMOS_ENV
 
 Access the main DEMOS project folder and running the skims processing file using the following command:
 ```
+cd demos_urbansim
 python process_skims.py
 ```
 
@@ -102,11 +99,6 @@ Before running the simulation, navigate to the project directory and activate th
 
 ```
 conda activate DEMOS
-```
-
-To run a simple simulation of DEMOS for the bay area (region code 06197001) from 2010 to 2020, run the following command:
-```
-python -u simulate.py -c -cf custom -l -r 06197001
 ```
 
 The general command for running the DEMOS simulation is the following:
@@ -141,20 +133,62 @@ This command will direct the software to the correct input data and configuratio
 
 8. Simulation results
 The DEMOS simulation will produce the following sets of data and results:
-  - A synthetic population file showing the evolution of the synthetic population throughout the simulation years. The file should be named `model_data_SCENARIO_NAME_OUTPUT_YEAR.h5`.
-  - Series of aggregated statistics for the population size, number of households, household size distribution, gender distribution, number of births, number of mortalities, number of student enrollments, number of total marriages, number of total divorces, the age distribution of the synthetic population, and income distribution for each simulation year.
+  - A synthetic population file containing the evolved synthetic population throughout the simulation years in `h5` format.
+
+The file can be used to generate summary statistics on population characteristics for each of the simulated years.
 
 ## II. Project Structure
 
 The main folder of this repository contains several python scripts that contain the different steps necessary to import, process, and run the DEMOS framework. The following is a description of the different folder and scripts used to run the DEMOS simulation
 
-1. The `configs\` directory: this folder contains the different `.yaml` configuration files to run each of the DEMOS and urbansim models. The configuration files for each region are located in subdirectories with the name of the region
-2. The `data\` directory: contains all the data needed to run the simulation
-3. `variables.py`: this script defines all the temporary variables needed to run the models. Each variable is created as an Orca column.
-4. `datasources.py`: this script imports all the necessary data for the specified simulation region and create simulation output folders, if needed.
-5. `models.py`: this script defines all the models as orca steps and defines all pre-processing and post-processing steps needed for each of the models.
-6. `simulate.py`: this script defines all the simulation parameters and runs the rest of the scripts desribed above.
-7. The `outputs\` directory: contains the different results produced by the simulation. Simulation results for each region are stored in their respective subdirectories.
+### The `configs\` directory
+The `configs\` directory contains the different `.yaml` configuration files to run each of the DEMOS and urbansim models.
+The configuration files follow the format based on UrbanSim Templates (https://github.com/UDST/urbansim_templates).
+Each configuration file (see here for example) contains a model specification, the input and output tables, along with filtering conditions for input and output subpopulations (e.g.: when models are only applicable to subpopulations, such as the laborforce participation model)
+The DEMOS models specification files are as follows:
+
+1. `demos_birth_model.yaml`: Configuration of the birth model. (Binary Logit)
+2. `demos_mortality_model.yaml`: Configuration of the mortality model. (Binary Logit)
+3. `demos_single_to_x.yaml`: Configuration of the single to X model. (MNL)
+4. `demos_divorce_model.yaml`: Configuration of the divorce model. (Binary Logit)
+5. `demos_cohabitate_to_x.yaml`: Configuration of the cohabitation to X model. (MNL)
+4. `demos_kids_move_model.yaml`: Configuration of kids moving out model. (Binary Logit)
+5. `demos_edu_model.yaml`: Configuration of the education model. (Binary Logit)
+6. `demos_in_labor_force_model.yaml` and `demos_out_labor_force_model.yaml`: Configurations of the in/out labor force models. (Binary Logit)
 
 
-**DETAILED DESCRIPTION OF EACH OF THE SCRIPTS WILL BE ADDED HERE AS THE STRUCTURE IS BEING MODIFIED FOR GENERALIZABILITY**
+### The `data\` directory:
+This directory contains the different data files needed to run the DEMOS model. Specifically, it includes the following files:
+
+1. The input synthetic population for the region, 
+2. Calibration data including observed outcomes between two specific years, with files in this nomenclature: `calibration_xxx_2010_2050.csv`
+3. Post-processing mapping matrix to update household roles when applicable `.csv`
+4. Income growth rates `.csv`
+
+### `variables.py`
+The file variables.py contains Python code defining and creating various types of variables necessary for use within the DEMOS models.
+Each variable is defined as a function and decorated with an ```orca``` column dectorator, associated with agents such as persons and households.
+For example, the following defines a dummy variable indicating whether each person is a female:
+
+```
+@orca.column('persons')
+def gender2(persons):
+    p = persons.to_frame(columns=['sex'])
+    return p.eq(2).astype(int)
+```
+### `datasources.py`:
+This script loads all the necessary data for the simulation, including the input data, models, and calibration data.
+
+### `models.py`:
+   This script defines all the models used in DEMOS, and listed in the beginning of this document. Each model is defined as an `orca` step. In addition to the models, the script contains pre-processing and post-processing functions for the models. Users can use this script to customize which models to run, and in what order. Users can add any new models here. An example of a model is as follows:
+
+```
+@orca.step("education_model")
+def education_model(persons, year):
+```
+
+### `simulate.py`:
+This script defines the simulation pipeline and the simulation parameters for DEMOS.
+
+### `outputs\` directory:
+This directory contains files with aggregate results produced by the simulation. Simulation results for each region are stored in their respective subdirectories.
