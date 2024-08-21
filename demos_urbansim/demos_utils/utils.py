@@ -746,3 +746,19 @@ def aggregate_household_data(persons_df, households_df, initialize_new_household
         agg_households["hh_type"] = 0
 
     return persons_df, agg_households
+
+
+def calibrate_model(model, target_count, threshold=0.05):
+    model.run()
+    predictions = model.choices.astype(int)
+    predicted_share = predictions.sum() / predictions.shape[0]
+    target_share = target_count / predictions.shape[0]
+
+    error = (predictions.sum() - target_count.sum())/target_count.sum()
+    while np.abs(error) >= threshold:
+        model.fitted_parameters[0] += np.log(target_count.sum()/predictions.sum())
+        model.run()
+        predictions = model.choices.astype(int)
+        predicted_share = predictions.sum() / predictions.shape[0]
+        error = (predictions.sum() - target_count.sum())/target_count.sum()
+    return predictions
