@@ -138,9 +138,9 @@ def update_education_status(persons_df, student_list, year):
     return persons_df
 
 
-# -----------------------------------------------------------------------------------------
+# -------------------------------
 # BIRTH TABLE
-# -----------------------------------------------------------------------------------------
+# -------------------------------
 def update_birth_eligibility_count_table(btable_elig_df, eligible_household_ids, year):
     """
     Function to update the birth eligibility count table
@@ -663,6 +663,7 @@ def aggregate_household_data(persons_df, households_df, initialize_new_household
         "age_gt55": ("age_gt55", "sum"),
         "children": ("child", "sum"),
     }
+    agg_dict = {k: v for k, v in agg_dict.items() if v[0] in persons_df.columns}
 
     if initialize_new_households:
         persons_df["cars"] = np.random.choice([0, 1, 2], size=len(persons_df))

@@ -76,7 +76,6 @@ def work_location_stats(persons):
     print("Share of workers with no work location:", share_workers_no_location)
     print("Share of people with no work location:", share_people_no_location)
 
-
 @orca.step("status_report")
 def status_report(year):
     print("------------------------------------------------")
@@ -119,8 +118,6 @@ def build_networks(blocks, block_groups, nodes, edges):
 
     orca.add_injectable("net", net)
 
-
-
 @orca.step("add_temp_variables")
 def add_temp_variables():
     """Adds temporary variables to the persons and
@@ -133,7 +130,6 @@ def add_temp_variables():
 
     orca.add_table("persons", persons)
 
-
 @orca.step("remove_temp_variables")
 def remove_temp_variables():
     """Removes temporary variables from the persons
@@ -143,10 +139,9 @@ def remove_temp_variables():
     persons = persons.drop(columns=["dead", "stop", "kid_moves"])
     orca.add_table("persons", persons)
 
-
-# -----------------------------------------------------------------------------------------
+# -----------------------------------------------
 # DEMOS
-# -----------------------------------------------------------------------------------------
+# -----------------------------------------------
 
 @orca.step("household_stats")
 def household_stats(persons, households):
@@ -215,33 +210,35 @@ def fatality_model(persons, households, year):
     persons_df = orca.get_table("persons").local
     persons_df["dead"] = -99
     orca.add_table("persons", persons_df)
-    # Retrieve and calibrate the mortality model
-    mortality = mm.get_step("mortality")
-    observed_fatalities_df = orca.get_table("observed_fatalities_data").to_frame()
-    target_count = observed_fatalities_df[observed_fatalities_df["year"] == year]["count"].iloc[0]
-    fatality_list = calibrate_model(mortality, target_count)
-
-    # Print predicted and observed fatalities
-    predicted_fatalities = fatality_list.sum()
-    print(f"{predicted_fatalities} predicted fatalities")
-    print(f"{target_count} observed fatalities")
-
-    # Update households and persons tables
-    remove_dead_persons(
-        orca.get_table("persons"), 
-        orca.get_table("households"), 
-        fatality_list, 
-        year
-    )
-
-    # Update or create the mortalities table
+    households_df = orca.get_table("households").local
+    #FIXME: NEED TO TRACK POP_OVER_TIME
+    grave = orca.get_table("pop_over_time").to_frame()
+    metadata = orca.get_table("metadata").to_frame()
+    graveyard_table = orca.get_table("graveyard").to_frame()
     mortalities_df = orca.get_table("mortalities").to_frame()
-    mortalities_new_row = pd.DataFrame(
-        {"year": [year], "count": [predicted_fatalities]}
-    )
-    mortalities_df = (pd.concat([mortalities_df, mortalities_new_row], ignore_index=True) 
-                    if not mortalities_df.empty else mortalities_new_row)
+    persons_local_columns = orca.get_injectable("persons_local_cols")
+    households_local_columns = orca.get_injectable("households_local_cols")
+    observed_fatalities_df = orca.get_table("observed_fatalities_data").to_frame()
+    target_count = observed_fatalities_df.query(f"year == {year}")["count"].squeeze()
+    
+    # Calibrate the mortality model
+    mortality = mm.get_step("mortality")
+    fatality_list = calibrate_model(mortality, target_count)
+    predicted_fatalities = fatality_list.sum()
+    # Update households and persons tables
+    persons_df, households_df, grave_persons = remove_dead_persons(persons_df, 
+                        households_df, fatality_list, year)
+    
+    metadata = update_metadata(metadata, households_df, persons_df)
+    graveyard_table = update_graveyard_table(graveyard_table, grave_persons)    
+    # Update or create the mortalities table
+    mortalities_df = update_mortalities_table(mortalities_df, predicted_fatalities, year)
+    # Add tables
     orca.add_table("mortalities", mortalities_df)
+    orca.add_table("persons", persons_df[persons_local_columns])
+    orca.add_table("graveyard", graveyard_table[persons_local_columns])
+    orca.add_table("households", households_df[households_local_columns])
+    orca.add_table("metadata", metadata)
 
 @orca.step("aging_model")
 def aging_model(persons, households):
@@ -333,7 +330,6 @@ def birth_model(persons, households, year):
     Returns:
         None
     """
-
     households_df = households.local
     households_df["birth"] = -99
     orca.add_table("households", households_df)
@@ -2002,7 +1998,6 @@ def full_transition(
                 updated = updated_sub.copy()
             else:
                 updated = pd.concat([updated, updated_sub])
-
             if added.empty:
                 added = added_sub.copy()
             else:
@@ -2407,13 +2402,13 @@ if orca.get_injectable("running_calibration_routine") == False:
         add_variables = ["add_temp_variables"]
         start_of_year_models = ["status_report"]
         demo_models = [
-            "aging_model",
-            "laborforce_model",
-            "households_reorg",
-            "kids_moving_model",
+            # "aging_model",
+            # "laborforce_model",
+            # "households_reorg",
+            # "kids_moving_model",
             "fatality_model",
-            "birth_model",
-            "education_model",
+            # "birth_model",
+            # "education_model",
         ]
         pre_processing_steps = price_models + ["build_networks", "generate_outputs", "update_travel_data"]
         rem_variables = ["remove_temp_variables"]
@@ -2429,10 +2424,10 @@ if orca.get_injectable("running_calibration_routine") == False:
             + demo_models
             # + work_models
             # + school_models
-            + price_models
-            + developer_models
-            + household_models
-            + employment_models
+            # + price_models
+            # + developer_models
+            # + household_models
+            # + employment_models
             + end_of_year_models
             # + mlcm_postprocessing
             + export_demo_steps
