@@ -102,9 +102,9 @@ def remove_dead_persons(persons_df, households_df, fatality_list, year):
     # Remove from households table
     households_df = households_df[~households_df.index.isin(dead_households)]
 
-    ##################################################
-    ##### HOUSEHOLDS WHERE PART OF HOUSEHOLD DIES ####
-    ##################################################
+    #--------------------------------------------
+    #HOUSEHOLDS WHERE PART OF HOUSEHOLD DIES
+    #--------------------------------------------
     # dead
     dead_df = persons_df[persons_df["dead"] == 1].copy()
     # alive
@@ -113,15 +113,6 @@ def remove_dead_persons(persons_df, households_df, fatality_list, year):
     persons_df = update_marital_status_for_widows(persons_df, dead_df)
     persons_df = restructure_headless_households(persons_df, dead_df)
 
-    # persons_df["is_relate_0"] = (persons_df["relate"]==0).astype(int)
-    # persons_df["is_relate_1"] = (persons_df["relate"]==1).astype(int)
-
-    # alive_agg = persons_df.groupby("household_id").agg(sum_relate_0 = ("is_relate_0", "sum"), sum_relate_1 = ("is_relate_1", "sum"))
-    
-    # # Dropping households with more than one head or more than one partner
-    # alive_agg = alive_agg[(alive_agg["sum_relate_1"]<=1) & (alive_agg["sum_relate_0"]<=1)]
-    # alive_hh = alive_agg.index.tolist()
-    # persons_df = persons_df[persons_df["household_id"].isin(alive_hh)]
     persons_df, updated_households_df = aggregate_household_data(persons_df, households_df, initialize_new_households=False)
 
     households_df.update(updated_households_df)

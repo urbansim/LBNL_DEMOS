@@ -17,33 +17,40 @@ import yaml
 from google.cloud import storage
 from scipy.spatial.distance import cdist
 from urbansim.developer import developer
-from demos_urbansim.demos_utils.utils import (
-    increment_ages, update_education_status, simulation_mnl, 
-    update_birth_eligibility_count_table, 
-    update_births_predictions_table, 
-    get_birth_eligible_households, 
-    update_birth, update_metadata, update_income,
-    update_labor_status,
-    update_workforce_stats_tables,
-    aggregate_household_labor_variables,
-    extract_students, create_student_groups, assign_schools, create_results_table, export_demo_table,
-    update_kids_moving_table,
-    update_households_after_kids,
-    deduplicate_updated_households,
-    calibrate_model,
-    update_divorce,
-    update_cohabitating_households,
+from demos_urbansim.demos_utils.aging_utils import increment_ages
+from demos_urbansim.demos_utils.education_utils import (
+    update_education_status,
+    extract_students,
+    create_student_groups,
+    assign_schools,
+    create_results_table
+)
+from demos_urbansim.demos_utils.household_reorg_utils import (
     update_married_households_random,
-    fix_erroneous_households,
-    update_marrital_status_stats,
+    update_divorce,
     update_divorce_predictions,
+    update_marrital_status_stats,
     print_household_stats,
     update_married_predictions,
+    get_marriage_eligible_persons,
+    get_divorce_eligible_household_ids,
+    update_cohabitating_households,
     get_cohabitation_to_x_eligible_households,
     get_divorce_eligible_household_ids,
     get_marriage_eligible_persons
 )
-from mortality_model_utils import *
+from demos_urbansim.demos_utils.kids_move_utils import update_households_after_kids, update_kids_moving_table
+from demos_urbansim.demos_utils.simulation_utils import simulation_mnl, calibrate_model
+from demos_urbansim.demos_utils.birth_utils import update_birth, get_birth_eligible_households, update_births_predictions_table, update_birth_eligibility_count_table
+from demos_urbansim.demos_utils.laborforce_utils import update_workforce_stats_tables, aggregate_household_labor_variables, sample_income, update_labor_status
+from demos_urbansim.demos_utils.utils import (
+    update_metadata,
+    export_demo_table,
+    deduplicate_updated_households,
+    deduplicate_multihead_households,
+)
+from demos_urbansim.demos_utils.mortality_model_utils import *
+from demos_urbansim.demos_utils.income_utils import update_income
 
 # import demo_models
 from urbansim.models import GrowthRateTransition, transition
@@ -149,58 +156,6 @@ def remove_temp_variables():
 # -----------------------------------------------
 # DEMOS
 # -----------------------------------------------
-@orca.step("household_stats")
-def household_stats(persons, households):
-    """Function to print the number of households
-    from both the households and pers
-
-    Args:
-        persons (DataFrame): Pandas DataFrame of the persons table
-        households (DataFrame): Pandas DataFrame of the households table
-    """
-    # Retrieve data from tables
-    persons_table = orca.get_table("persons").local
-    households_table = orca.get_table("households").local
-
-    # Unique household IDs from persons table
-    unique_households_persons = persons_table["household_id"].unique()
-    # Unique household IDs from households table
-    unique_households_households = households_table.index.unique()
-
-    # Print statements
-    print(f"Households size from persons table: {unique_households_persons.shape[0]}")
-    print(f"Households size from households table: {unique_households_households.shape[0]}")
-
-    # Households in one table but not the other
-    households_diff_ph = set(unique_households_persons) - set(unique_households_households)
-    households_diff_hp = set(unique_households_households) - set(unique_households_persons)
-    print(f"Households in households table not in persons table: {len(households_diff_ph)}")
-    print(f"Households in persons table not in households table: {len(households_diff_hp)}")
-
-    # Households with NA persons
-    print(f"Households with NA persons: {households_table['persons'].isna().sum()}")
-
-    # Duplicated households and persons
-    print(f"Duplicated households: {households_table.index.has_duplicates}")
-    print(f"Duplicated persons: {persons_table.index.has_duplicates}")
-
-    # Adding new columns to persons_df based on conditions
-    persons_table["relate_0"] = np.where(persons_table["relate"] == 0, 1, 0)
-    persons_table["relate_1"] = np.where(persons_table["relate"] == 1, 1, 0)
-    persons_table["relate_13"] = np.where(persons_table["relate"] == 13, 1, 0)
-
-    # Grouping and aggregating data
-    persons_df_sum = persons_table.groupby("household_id").agg(
-        relate_1=("relate_1", sum),
-        relate_13=("relate_13", sum),
-        relate_0=("relate_0", sum)
-    )
-
-    # Printing households with multiple relationships
-    print("Households with multiple 0: ", (persons_df_sum["relate_0"] > 1).sum())
-    print("Households with multiple 1: ", (persons_df_sum["relate_1"] > 1).sum())
-    print("Households with multiple 13: ", (persons_df_sum["relate_13"] > 1).sum())
-    print("Households with 1 and 13: ", ((persons_df_sum["relate_1"] * persons_df_sum["relate_13"]) > 0).sum())
 
 @orca.step("fatality_model")
 def fatality_model(persons, households, year):
@@ -484,7 +439,7 @@ def households_reorg(persons, households, year):
     married_table = update_married_predictions(married_table, marriage_list)
     orca.add_table("marriage_table", married_table)
     print_household_stats(persons_df, households_df)
-    persons_df, households_df = fix_erroneous_households(persons_df, households_df)
+    persons_df, households_df = deduplicate_multihead_households(persons_df, households_df)
     print_household_stats(persons_df, households_df)
     
     print("Divorces..")
@@ -1167,7 +1122,7 @@ if orca.get_injectable("running_calibration_routine") == False:
         developer_models = ["supply_transition"] + [
             "rdplcm" + str(segment) for segment in range(0, 4)
         ]
-        household_models = ["household_transition"] + ["households_relocation_basic"] + ["household_stats"], [
+        household_models = ["household_transition"] + ["households_relocation_basic"] + [
             "hlcm" + str(segment) for segment in range(1, 11)
         ]
         employment_models = ["job_transition"] + [
@@ -1201,16 +1156,15 @@ if orca.get_injectable("running_calibration_routine") == False:
         demo_models = [
             # "aging_model",
             # "laborforce_model",
-            "households_reorg",
-            "kids_moving_model",
-            # "fatality_model",
+            # "households_reorg",
+            # "kids_moving_model",
+            "fatality_model",
             "birth_model",
-            "education_model",
+            # "education_model",
         ]
         pre_processing_steps = price_models + ["build_networks", "generate_outputs", "update_travel_data"]
         rem_variables = ["remove_temp_variables"]
         export_demo_steps = ["export_demo_stats"]
-        household_stats = ["household_stats"]
         school_models = ["school_location"]
         end_of_year_models = ["generate_outputs"]
         work_models = ["work_location"]
