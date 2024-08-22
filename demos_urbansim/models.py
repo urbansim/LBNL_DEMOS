@@ -39,9 +39,9 @@ from demos_urbansim.demos_utils.utils import (
     update_divorce_predictions,
     print_household_stats,
     update_married_predictions,
-    fetch_cohabitate_to_x_household_ids,
-    fetch_divorce_input_household_ids,
-    fetch_marriage_eligible_persons
+    get_cohabitation_to_x_eligible_households,
+    get_divorce_eligible_household_ids,
+    get_marriage_eligible_persons
 )
 from mortality_model_utils import *
 
@@ -439,7 +439,7 @@ def households_reorg(persons, households, year):
     marriage_coeffs = pd.DataFrame(marriage_model["model_coeffs"])
     marriage_variables = pd.DataFrame(marriage_model["spec_names"])
     marriage_variables = marriage_variables[0].values.tolist()
-    marriage_eligible_persons = fetch_marriage_eligible_persons(persons_df)
+    marriage_eligible_persons = get_marriage_eligible_persons(persons_df)
     marriage_to_x_data = persons.to_frame(columns=marriage_variables).loc[marriage_eligible_persons]
     # Run model
     marriage_list = simulation_mnl(marriage_to_x_data, marriage_coeffs)
@@ -449,7 +449,7 @@ def households_reorg(persons, households, year):
     #----------------------------------------
     households_df["divorced"] = -99
     orca.add_table("households", households_df)
-    divorce_eligible_hh_ids = fetch_divorce_input_household_ids(persons_df)
+    divorce_eligible_hh_ids = get_divorce_eligible_household_ids(persons_df)
     divorce_model = mm.get_step("divorce")
     divorce_eligible_hh_ids = str(divorce_eligible_hh_ids)
     divorce_model.filters = "index in " + divorce_eligible_hh_ids
@@ -464,7 +464,7 @@ def households_reorg(persons, households, year):
     cohabitation_coeffs = pd.DataFrame(cohabitation_model["model_coeffs"])
     cohabitation_variables = pd.DataFrame(cohabitation_model["spec_names"])
     cohabitation_variables = cohabitation_variables[0].values.tolist()
-    eligible_cohab_to_x_households = fetch_cohabitate_to_x_household_ids(persons_df)
+    eligible_cohab_to_x_households = get_cohabitation_to_x_eligible_households(persons_df)
     cohabitate_to_x_data = households.to_frame(columns=cohabitation_variables).loc[eligible_cohab_to_x_households]
     # Run Model
     cohabitate_to_x_preds = simulation_mnl(cohabitate_to_x_data, cohabitation_coeffs)

@@ -4,14 +4,22 @@ import orca
 from scipy.special import softmax
 
 def simulation_mnl(data, coeffs):
-    """Function to run simulation of the MNL model
+    """
+    Simulate choices using a Multinomial Logit (MNL) model.
+
+    This function calculates the utility of each choice alternative using the 
+    provided data and coefficients, applies the softmax function to compute 
+    choice probabilities, and simulates choices based on these probabilities.
 
     Args:
-        data (_type_): _description_
-        coeffs (_type_): _description_
+        data (pd.DataFrame or np.ndarray): The input data containing features 
+                                           for each choice alternative.
+        coeffs (np.ndarray): Coefficients for the MNL model, used to calculate 
+                             the utility of each choice alternative.
 
     Returns:
-        Pandas Series: Pandas Series of the outcomes of the simulated model
+        pd.Series: A Pandas Series containing the simulated choices, indexed 
+                   by the input data's index.
     """
     utils = np.dot(data, coeffs)
     base_util = np.zeros(utils.shape[0])
@@ -25,16 +33,21 @@ def simulation_mnl(data, coeffs):
 
 def increment_ages(persons_df):
     """
-    Function to increment the age of the persons table and
-    update the age of the household head in the household table.
+    Increment the ages of individuals and update related demographic attributes.
+
+    This function increases the age of each individual in the `persons_df` by one year.
+    It also updates various demographic attributes such as child status, head of household
+    status, and senior status. Additionally, it generates age-related columns in the 
+    households table, summarizing the number of children, seniors, and the age of the 
+    household head.
 
     Args:
-        persons_df (pd.DataFrame): DataFrame of the persons table
+        persons_df (pd.DataFrame): DataFrame containing person-level data, including 
+                                   age, relationship status, and household IDs.
 
     Returns:
-        persons_df (pd.DataFrame): DataFrame of the persons table with the age incremented
-        households_ages (pd.DataFrame): DataFrame of the updated households
-        table with only age related columns
+        tuple: Updated `persons_df` with incremented ages and a DataFrame of aggregated 
+               age-related data for households.
     """
     # Increment the age of the persons table
     persons_df["age"] += 1
@@ -70,19 +83,24 @@ def increment_ages(persons_df):
 
 def update_education_status(persons_df, student_list, year):
     """
-    Function to update the student status in persons table based
-    on the
+    Update the education status of individuals in the persons DataFrame.
+
+    This function updates the education level and student status of individuals 
+    based on their current age and a provided list indicating whether they continue 
+    their education. It differentiates between those dropping out and those staying 
+    in school, and adjusts their education levels accordingly.
 
     Args:
-        persons (DataFrameWrapper): DataFrameWrapper of the persons table
-        student_list (pd.Series): Pandas Series containing the output of
-        the education model
+        persons_df (pd.DataFrame): DataFrame containing person-level data, including 
+                                   age, education, and student status.
+        student_list (pd.Series): Series indicating whether individuals will continue 
+                                  their education (0 for staying, 1 for dropping out).
+        year (int): The current year for which the education status updates are being applied.
 
     Returns:
-        None
+        pd.DataFrame: Updated `persons_df` with modified education levels and student status.
     """
     # Pull Data
-
     persons_df["stop"] = student_list
     persons_df["stop"].fillna(2, inplace=True)
 
@@ -93,7 +111,6 @@ def update_education_status(persons_df, student_list, year):
     staying_school.loc[:, "student"] = 1
 
     # Update education level for individuals staying in school
-
     persons_df.loc[persons_df["age"] == 3, "edu"] = 2
     persons_df.loc[persons_df["age"].isin([4, 5]), "edu"] = 4
 
@@ -143,7 +160,20 @@ def update_education_status(persons_df, student_list, year):
 # -------------------------------
 def update_birth_eligibility_count_table(btable_elig_df, eligible_household_ids, year):
     """
-    Function to update the birth eligibility count table
+    Update the birth eligibility count table with the number of eligible households.
+
+    This function adds a new entry to the birth eligibility count table, recording
+    the number of households eligible for births in the given year. If the table is
+    initially empty, it creates a new DataFrame with the current count.
+
+    Args:
+        btable_elig_df (pd.DataFrame): Existing DataFrame containing the history of 
+                                       birth eligibility counts. Can be empty initially.
+        eligible_household_ids (list): List of household IDs that are eligible for births.
+        year (int): The current year for which the birth eligibility is being recorded.
+
+    Returns:
+        pd.DataFrame: Updated birth eligibility count table with a new row for the current year.
     """
     btable_elig_df_new = pd.DataFrame.from_dict({
             "year": [str(year)],
@@ -157,6 +187,22 @@ def update_birth_eligibility_count_table(btable_elig_df, eligible_household_ids,
     return btable_elig_df
 
 def update_births_predictions_table(births_table, year, birth_list):
+    """
+    Update the births predictions table with the number of predicted births for the current year.
+
+    This function adds a new entry to the births predictions table, recording the number of 
+    predicted births in the given year. If the table is initially empty, it creates a new 
+    DataFrame with the current count.
+
+    Args:
+        births_table (pd.DataFrame): Existing DataFrame containing the history of predicted 
+                                     births. Can be empty initially.
+        year (int): The current year for which the birth predictions are being recorded.
+        birth_list (pd.Series): Series indicating the households with predicted births.
+
+    Returns:
+        pd.DataFrame: Updated births predictions table with a new row for the current year.
+    """
         # print("Updating birth metrics...")
         btable_df_new = pd.DataFrame.from_dict({
                 "year": [str(year)],
@@ -169,6 +215,22 @@ def update_births_predictions_table(births_table, year, birth_list):
         return births_table
 
 def get_birth_eligible_households(persons_df, households_df):
+    """
+    Identify households eligible for births based on person-level data.
+
+    This function determines which households are eligible for births by identifying
+    individuals within a specified age range and gender. It returns a list of unique
+    household IDs that meet the eligibility criteria.
+
+    Args:
+        persons_df (pd.DataFrame): DataFrame containing person-level data, including 
+                                   age, gender, and household IDs.
+        households_df (pd.DataFrame): DataFrame containing household-level data, 
+                                      indexed by household IDs.
+
+    Returns:
+        list: A list of household IDs that are eligible for the birth model.
+    """
     ELIGIBILITY_COND = (
         (persons_df["sex"] == 2)
         & (persons_df["age"].between(14, 45))
@@ -181,18 +243,26 @@ def get_birth_eligible_households(persons_df, households_df):
 
 def update_birth(persons_df, households_df, birth_list, metadata):
     """
-    Update the persons tables with newborns and household sizes
+    Update the persons and households dataframes to reflect new births.
 
-    Args:   
-        persons_df (pd.DataFrame): DataFrame of the persons table
-        households_df (pd.DataFrame): DataFrame of the households table
-        birth_list (pd.Series): Pandas Series of the households with newborns
+    This function adds new individuals (babies) to the `persons_df` based on the 
+    `birth_list`, which indicates households with predicted births. It assigns new 
+    person IDs to the babies and updates the `households_df` to reflect the increased 
+    household size and other related attributes.
+
+    Args:
+        persons_df (pd.DataFrame): DataFrame containing person-level data, including 
+                                   household IDs and demographic attributes.
+        households_df (pd.DataFrame): DataFrame containing household-level data, 
+                                      indexed by household IDs.
+        birth_list (pd.Series): Series indicating the households with predicted births.
+        metadata (pd.DataFrame): DataFrame containing metadata, including the maximum 
+                                 person ID.
 
     Returns:
-        pd.DataFrame: DataFrame of the persons table
-        pd.DataFrame: DataFrame of the households table
+        tuple: Updated `persons_df` with new individuals added and `households_df` 
+               reflecting the changes due to new births.
     """
-
     # Pull max person index from persons table
     highest_index = persons_df.index.max()
 
@@ -309,6 +379,24 @@ def update_birth(persons_df, households_df, birth_list, metadata):
     return combined_result, households_df
 
 def update_metadata(metadata, households_df, persons_df):
+    """
+    Update metadata with the latest maximum household and person IDs.
+
+    This function checks the current maximum household and person IDs in the 
+    `households_df` and `persons_df`, respectively, and updates the `metadata` 
+    DataFrame to reflect these values if they exceed the existing maximums.
+
+    Args:
+        metadata (pd.DataFrame): DataFrame containing metadata, including the 
+                                 maximum household and person IDs.
+        households_df (pd.DataFrame): DataFrame containing household-level data, 
+                                      indexed by household IDs.
+        persons_df (pd.DataFrame): DataFrame containing person-level data, 
+                                   including household IDs.
+
+    Returns:
+        pd.DataFrame: Updated `metadata` DataFrame with the latest maximum IDs.
+    """
     max_hh_id = metadata.loc["max_hh_id", "value"]
     max_p_id = metadata.loc["max_p_id", "value"]
     if households_df.index.max() > max_hh_id:
@@ -318,6 +406,25 @@ def update_metadata(metadata, households_df, persons_df):
     return metadata
 
 def update_income(persons_df, households_df, income_rates, year):
+    """
+    Update the income of individuals and households based on income rates for a given year.
+
+    This function adjusts the earnings of individuals in the `persons_df` by applying 
+    income growth rates specific to their county and the current year. It then aggregates 
+    the updated earnings to compute the total household income and updates the `households_df`.
+
+    Args:
+        persons_df (pd.DataFrame): DataFrame containing person-level data, including 
+                                   earnings and household IDs.
+        households_df (pd.DataFrame): DataFrame containing household-level data, 
+                                      indexed by household IDs.
+        income_rates (pd.DataFrame): DataFrame containing income growth rates by county 
+                                     and year.
+        year (int): The current year for which the income updates are being applied.
+
+    Returns:
+        tuple: Updated `persons_df` and `households_df` with adjusted incomes.
+    """
     year_income_rate = income_rates[income_rates["year"] == year]
     hh_counties = households_df["lcm_county_id"].copy()
     persons_df = (persons_df.reset_index().merge(hh_counties.reset_index(), on=["household_id"]).set_index("person_id"))
@@ -331,6 +438,22 @@ def update_income(persons_df, households_df, income_rates, year):
     return persons_df, households_df
 
 def update_workforce_stats_tables(workforce_df, persons_df, year):
+    """
+    Update workforce statistics tables with current year data.
+
+    This function updates the workforce statistics by adding new data for the 
+    current year, including the number of individuals entering and exiting the 
+    workforce. It appends this data to the existing workforce statistics DataFrame.
+
+    Args:
+        workforce_df (pd.DataFrame): DataFrame containing historical workforce statistics.
+        persons_df (pd.DataFrame): DataFrame containing person-level data, including 
+                                   employment status.
+        year (int): The current year for which the statistics are being updated.
+
+    Returns:
+        pd.DataFrame: Updated `workforce_df` with new statistics for the current year.
+    """
     new_workforce_df = pd.DataFrame(
             data={"year": [year], "entering_workforce": [persons_df[persons_df["remain_unemployed"]==0].shape[0]],
             "exiting_workforce": [persons_df[persons_df["exit_workforce"]==1].shape[0]]})
@@ -341,6 +464,23 @@ def update_workforce_stats_tables(workforce_df, persons_df, year):
     return workforce_df
 
 def aggregate_household_labor_variables(persons_df, households_df):
+    """
+    Aggregate labor-related variables at the household level.
+
+    This function calculates household-level labor statistics by aggregating 
+    person-level data. It computes the total number of workers and the total 
+    income for each household, and categorizes households based on the number 
+    of workers.
+
+    Args:
+        persons_df (pd.DataFrame): DataFrame containing person-level data, 
+                                   including worker status and earnings.
+        households_df (pd.DataFrame): DataFrame containing household-level data, 
+                                      indexed by household IDs.
+
+    Returns:
+        pd.DataFrame: Updated `households_df` with aggregated labor variables.
+    """
     # TODO: Similarly, do something for work from home
     household_incomes = persons_df.groupby("household_id").agg(
         sum_workers = ("worker", "sum"),
@@ -357,22 +497,43 @@ def aggregate_household_labor_variables(persons_df, households_df):
     return households_df
 
 def sample_income(mean, std):
+    """
+    Generate a sample income using a log-normal distribution.
+
+    This function generates a random income value based on a log-normal distribution
+    defined by the specified mean and standard deviation.
+
+    Args:
+        mean (float): The mean of the log-normal distribution.
+        std (float): The standard deviation of the log-normal distribution.
+
+    Returns:
+        float: A randomly sampled income value.
+    """
     return np.random.lognormal(mean, std)
 
 def update_labor_status(persons_df, stay_unemployed_list, exit_workforce_list, income_summary):
     """
-    Function to update the worker status in persons table based
-    on the labor participation model
+    Update the labor status and income of individuals in the persons DataFrame.
+
+    This function updates the labor status of individuals based on whether they remain 
+    unemployed or exit the workforce. It also updates their income based on age and 
+    education group, using a provided income summary.
 
     Args:
-        persons (DataFrameWrapper): DataFrameWrapper of the persons table
-        student_list (pd.Series): Pandas Series containing the output of
-        the education model
+        persons_df (pd.DataFrame): DataFrame containing person-level data, including 
+                                   age, education, and current labor status.
+        stay_unemployed_list (pd.Series): Series indicating individuals who will remain 
+                                          unemployed.
+        exit_workforce_list (pd.Series): Series indicating individuals who will exit the 
+                                         workforce.
+        income_summary (pd.DataFrame): DataFrame containing income distribution parameters 
+                                       (mean and standard deviation) for different age and 
+                                       education groups.
 
     Returns:
-        None
+        pd.DataFrame: Updated persons_df with modified labor status and income.
     """
-    #####################################################
     age_intervals = [0, 20, 30, 40, 50, 65, 900]
     education_intervals = [0, 18, 22, 200]
     # Define the labels for age and education groups
@@ -381,8 +542,6 @@ def update_labor_status(persons_df, stay_unemployed_list, exit_workforce_list, i
     # Create age and education groups with labels
     persons_df['age_group'] = pd.cut(persons_df['age'], bins=age_intervals, labels=age_labels, include_lowest=True)
     persons_df['education_group'] = pd.cut(persons_df['edu'], bins=education_intervals, labels=education_labels, include_lowest=True)
-    #####################################################
-
     # Sample income for each individual based on their age and education group
     persons_df = persons_df.reset_index().merge(income_summary, on=['age_group', 'education_group'], how='left').set_index("person_id")
     persons_df['new_earning'] = persons_df.apply(lambda row: sample_income(row['mu'], row['sigma']), axis=1)
@@ -405,14 +564,20 @@ def update_labor_status(persons_df, stay_unemployed_list, exit_workforce_list, i
 
 
 def extract_students(persons):
-    """Retrieve the list of grade school students
+    """
+    Extract students from the persons DataFrame.
 
+    This function identifies individuals who are students based on their education level
+    and student status. It creates a DataFrame of students, categorizing them into 
+    elementary, middle, and high school levels.
 
     Args:
-        persons (Orca table): Persons orca table
+        persons (pd.DataFrame): DataFrame containing person-level data, including education 
+                                level and student status.
 
     Returns:
-        DataFrame: pandas dataframe of grade school students.
+        pd.DataFrame: A DataFrame of students with additional columns indicating their 
+                      school level (elementary, middle, or high).
     """
     edu_levels = np.arange(3, 16).astype(float)
     STUDENTS_CONDITION = (persons["student"]==1) & (persons["edu"].isin(edu_levels))
@@ -479,15 +644,22 @@ def assign_schools(student_groups, blocks_districts, schools_df):
     return assigned_students_list
 
 def create_results_table(students_df, assigned_students_list, year):
-    """Creates table of student assignment
+    """
+    Create a results table for student school assignments.
+
+    This function consolidates student assignment data into a single DataFrame,
+    detailing which students have been assigned to which schools. It includes
+    information about the household, school district, and school level.
 
     Args:
-        students_df (DataFrame): students dataframe
-        assigned_students_list (list): student assignment list
-        year (int): year of simulation
+        students_df (pd.DataFrame): DataFrame of students with their IDs and other attributes.
+        assigned_students_list (list): List of DataFrames, each containing student assignments 
+                                       to schools, including school IDs and district information.
+        year (int): The year for which the assignments are being recorded.
 
     Returns:
-        DataFrame: student assignment dataframe
+        pd.DataFrame: A DataFrame containing the results of student assignments, including 
+                      student IDs, school IDs, and the year of assignment.
     """
     assigned_students_df = pd.concat(assigned_students_list)[["students", "household_id", "GEOID10_SD", "STUDENT_SCHOOL_LEVEL", "SCHOOL_ID"]]
     assigned_students_df = assigned_students_df.explode("students").rename(columns={"students": "person_id",
@@ -498,12 +670,18 @@ def create_results_table(students_df, assigned_students_list, year):
 
 def export_demo_table(table_name):
     """
-    Export the tables
+    Export a specified Orca table to a CSV file.
+
+    This function retrieves an Orca table by its name, converts it to a DataFrame,
+    and exports it as a CSV file. The CSV file is named using the table name and 
+    a region code, and is saved in a specified output folder.
 
     Args:
-        table_name (string): Name of the orca table
+        table_name (str): The name of the Orca table to be exported.
+
+    Returns:
+        None
     """
-    
     region_code = orca.get_injectable("region_code")
     output_folder = orca.get_injectable("output_folder")
     df = orca.get_table(table_name).to_frame()
@@ -511,6 +689,25 @@ def export_demo_table(table_name):
     df.to_csv(output_folder+csv_name, index=False)
 
 def deduplicate_updated_households(updated, persons_df, metadata):
+    """
+    Deduplicate and update household and person IDs after changes.
+
+    This function ensures that updated households and persons have unique IDs,
+    especially after modifications that might have introduced duplicates. It 
+    assigns new IDs to duplicate entries and updates the metadata accordingly.
+
+    Args:
+        updated (pd.DataFrame): DataFrame containing updated household data, 
+                                potentially with duplicates.
+        persons_df (pd.DataFrame): DataFrame containing person-level data, 
+                                   including household IDs.
+        metadata (pd.DataFrame): DataFrame containing metadata, including the 
+                                 maximum household and person IDs.
+
+    Returns:
+        tuple: Updated `updated` DataFrame with unique household IDs and 
+               `persons_df` with unique person IDs.
+    """
     max_hh_id = metadata.loc["max_hh_id", "value"]
     max_p_id = metadata.loc["max_p_id", "value"]
     unique_hh_ids = updated["household_id"].unique()
@@ -541,13 +738,13 @@ def update_kids_moving_table(kids_moving_table, kids_moving):
 
     Args:
         kids_moving_table (pd.DataFrame): Existing DataFrame containing the history of
-            kids moving out. Can be empty for the first iteration.
+                                          kids moving out. Can be empty for the first iteration.
         kids_moving (pd.Series): A boolean Series indicating which kids are moving out
-            in the current iteration.
+                                 in the current iteration.
 
     Returns:
         pd.DataFrame: Updated kids_moving_table with a new row added for the current
-            iteration's count of kids moving out.
+                      iteration's count of kids moving out.
     """
     new_kids_moving_table = pd.DataFrame(
             {"kids_moving_out": [kids_moving.sum()]}
@@ -565,13 +762,23 @@ def update_households_after_kids(persons_df, households_df, kids_moving, metadat
     """
     Add and update households after kids move out.
 
+    This function updates the `persons_df` and `households_df` to reflect changes 
+    when children move out of their current households. It assigns new household 
+    IDs to individuals moving out and updates household compositions accordingly.
+
     Args:
-        persons (DataFrameWrapper): DataFrameWrapper of persons table
-        households (DataFrameWrapper): DataFrameWrapper of households table
-        kids_moving (pd.Series): Pandas Series of kids moving out of household
+        persons_df (pd.DataFrame): DataFrame containing person-level data, including 
+                                   household IDs and demographic attributes.
+        households_df (pd.DataFrame): DataFrame containing household-level data, 
+                                      indexed by household IDs.
+        kids_moving (pd.Series): Pandas Series indicating which children are moving 
+                                 out of their current households.
+        metadata (pd.DataFrame): DataFrame containing metadata, including the maximum 
+                                 household ID.
 
     Returns:
-        None
+        tuple: Updated `persons_df` and `households_df` reflecting the changes due 
+               to children moving out.
     """
     # print("Updating households...")
     persons_df["moveoutkid"] = kids_moving
@@ -638,6 +845,25 @@ def update_households_after_kids(persons_df, households_df, kids_moving, metadat
 
 
 def aggregate_household_data(persons_df, households_df, initialize_new_households=False):
+    """
+    Aggregate household data from person-level data.
+
+    This function aggregates person-level data to create household-level summaries.
+    It calculates various household attributes such as income, race, age of head,
+    number of workers, and more. Optionally, it can initialize new households with
+    random attributes.
+
+    Args:
+        persons_df (pd.DataFrame): DataFrame containing person-level data, including 
+                                   household IDs and demographic attributes.
+        households_df (pd.DataFrame): DataFrame containing household-level data, 
+                                      indexed by household IDs.
+        initialize_new_households (bool, optional): If True, initializes new households 
+                                                    with attributes. Defaults to False.
+
+    Returns:
+        tuple: Updated `persons_df` and a DataFrame of aggregated household data.
+    """
     persons_df["person"] = 1
     persons_df["is_head"] = np.where(persons_df["relate"] == 0, 1, 0)
     persons_df["race_head"] = persons_df["is_head"] * persons_df["race_id"]
@@ -748,6 +974,25 @@ def aggregate_household_data(persons_df, households_df, initialize_new_household
 
 
 def calibrate_model(model, target_count, threshold=0.05):
+    """
+    Calibrate a model to match a target count.
+
+    This function adjusts the model's parameters to ensure that the predicted 
+    outcomes closely match the target count. It iteratively updates the model's 
+    parameters until the error between the predicted and target counts is within 
+    a specified threshold.
+
+    Args:
+        model: The model object to be calibrated. It must have `run` and 
+               `fitted_parameters` attributes.
+        target_count (int or float): The target count that the model's predictions 
+                                     should match.
+        threshold (float, optional): The acceptable error threshold for calibration. 
+                                     Defaults to 0.05.
+
+    Returns:
+        np.ndarray: The calibrated predictions from the model.
+    """
     model.run()
     predictions = model.choices.astype(int)
     predicted_share = predictions.sum() / predictions.shape[0]
@@ -763,9 +1008,23 @@ def calibrate_model(model, target_count, threshold=0.05):
     return predictions
 
 #------------------------------------------
-
 def fix_erroneous_households(persons_df, households_df):
-    print("Fixing erroneous households")
+    """
+    Fix households with erroneous compositions.
+
+    This function identifies and removes households that contain only non-head 
+    members (e.g., spouses or partners without a head) from the `households_df` 
+    and `persons_df`. It ensures that each household has a valid head member.
+
+    Args:
+        persons_df (pd.DataFrame): DataFrame containing person-level data, 
+                                   including household IDs and relationship status.
+        households_df (pd.DataFrame): DataFrame containing household-level data, 
+                                      indexed by household IDs.
+
+    Returns:
+        tuple: Updated `persons_df` and `households_df` with erroneous households removed.
+    """
     households_to_drop = persons_df[persons_df['relate'].isin([1, 13])].groupby('household_id')['relate'].nunique().reset_index()
     households_to_drop = households_to_drop[households_to_drop["relate"]==2]["household_id"].to_list()
     households_df = households_df.drop(households_to_drop)
@@ -776,13 +1035,22 @@ def fix_erroneous_households(persons_df, households_df):
 
 def update_married_households_random(persons_df, households_df, marriage_list, metadata):
     """
-    Update the marriage status of individuals and create new households
+    Update the marriage status of individuals and create new households.
+
+    This function processes a list of individuals who are getting married or cohabitating,
+    updating the `persons_df` and `households_df` to reflect changes in household composition
+    and individual statuses. It assigns new household IDs to individuals leaving their current
+    households and updates relationship statuses and other demographic attributes.
+
     Args:
-        persons (DataFrameWrapper): DataFrameWrapper of the persons table
-        households (DataFrameWrapper): DataFrameWrapper of the households table
-        marriage_list (pd.Series): Pandas Series of the married individuals
+        persons_df (pd.DataFrame): DataFrame containing person-level data, including household IDs 
+                                   and relationship status.
+        households_df (pd.DataFrame): DataFrame containing household-level data, indexed by household IDs.
+        marriage_list (pd.Series): Series indicating individuals undergoing marriage or cohabitation changes.
+        metadata (pd.DataFrame): DataFrame containing metadata, including the maximum household ID.
+
     Returns:
-        None
+        tuple: Updated `persons_df` and `households_df` reflecting the marriage and cohabitation events.
     """
     # print("Updating persons and households...")
     # household_cols = households.local_columns
@@ -1000,10 +1268,6 @@ def update_married_households_random(persons_df, households_df, marriage_list, m
     households_df = pd.concat([households_df, new_hh])
 
     return persons_df, households_df
-
-    # print('Time to run marriage', sp.duration)
-    # orca.add_table("households", household_df[household_cols])
-    # orca.add_table("persons", p_df[persons_cols])
 
 def update_married_households(persons, households, marriage_list):
     """
@@ -1365,15 +1629,22 @@ def update_married_households(persons, households, marriage_list):
 
 def update_cohabitating_households(persons_df, households_df, cohabitate_list, metadata):
     """
-    Updating households and persons after cohabitation model.
+    Updates the persons and households dataframes to reflect changes due to cohabitation events.
+
+    This function processes a list of households undergoing cohabitation changes, updating the 
+    `persons_df` and `households_df` to reflect changes in household composition and individual 
+    statuses. It assigns new household IDs to individuals leaving their current households and 
+    updates relationship statuses and other demographic attributes.
 
     Args:
-        persons (DataFrameWrapper): DataFrameWrapper of persons table
-        households (DataFrameWrapper): DataFrameWrapper of households table
-        cohabitate_list (pd.Series): Pandas Series of cohabitation model output
+        persons_df (pd.DataFrame): DataFrame containing person-level data, including household IDs 
+                                   and relationship status.
+        households_df (pd.DataFrame): DataFrame containing household-level data, indexed by household IDs.
+        cohabitate_list (pd.Series): Series indicating households undergoing cohabitation changes.
+        metadata (pd.DataFrame): DataFrame containing metadata, including the maximum household ID.
 
     Returns:
-        None
+        tuple: Updated `persons_df` and `households_df` reflecting the cohabitation events.
     """
     # persons_df = orca.get_table("persons").local
     # persons_local_cols = persons_df.columns
@@ -1555,25 +1826,26 @@ def update_cohabitating_households(persons_df, households_df, cohabitate_list, m
 
 def update_divorce(persons_df, households_df, divorce_list, metadata):
     """
-    Updating stats for divorced households
+    Updates the persons and households dataframes to reflect divorce events.
+
+    This function processes a list of households undergoing divorce, updating the 
+    `persons_df` and `households_df` to reflect changes in household composition 
+    and individual statuses. It assigns new household IDs to individuals leaving 
+    their current households and updates marital status and other demographic 
+    attributes.
 
     Args:
-        persons (DataFrameWrapper): DataFrameWrapper of the persons table
-        households (DataFrameWrapper): DataFrameWrapper of the households table
-        divorce_list (pd.Series): pandas Series of the divorced households
+        persons_df (pd.DataFrame): DataFrame containing person-level data, 
+                                   including household IDs and marital status.
+        households_df (pd.DataFrame): DataFrame containing household-level data, 
+                                      indexed by household IDs.
+        divorce_list (pd.Series): Series indicating households undergoing divorce.
+        metadata (pd.DataFrame): DataFrame containing metadata, including the 
+                                 maximum household ID.
 
     Returns:
-        None
+        tuple: Updated `persons_df` and `households_df` reflecting the divorce events.
     """
-    # print("Updating household stats...")
-    # households_local_cols = orca.get_table("households").local.columns
-
-    # persons_local_cols = orca.get_table("persons").local.columns
-
-    # households_df = orca.get_table("households").local
-
-    # persons_df = orca.get_table("persons").local
-
     households_df.loc[divorce_list.index,"divorced"] = divorce_list
 
     divorce_households = households_df[households_df["divorced"] == 1].copy()
@@ -1831,6 +2103,21 @@ def update_divorce(persons_df, households_df, divorce_list, metadata):
 
 
 def update_divorce_predictions(divorce_table, divorce_list):
+    """
+    Updates the divorce predictions table with new data.
+
+    This function updates the `divorce_table` DataFrame by adding the count of 
+    newly divorced households from the `divorce_list`. If the `divorce_table` is 
+    empty, it initializes it with the current counts. Otherwise, it appends the 
+    new counts to the existing table.
+
+    Args:
+        divorce_table (pd.DataFrame): DataFrame containing historical divorce data.
+        divorce_list (pd.Series): Series indicating the divorce status of households.
+
+    Returns:
+        pd.DataFrame: Updated DataFrame with the new divorce counts.
+    """
     if divorce_table.empty:
         divorce_table = pd.DataFrame([divorce_list.sum()], columns=["divorced"])
     else:
@@ -1839,6 +2126,23 @@ def update_divorce_predictions(divorce_table, divorce_list):
     return divorce_table
 
 def update_marrital_status_stats(persons_df, marrital, year):
+    """
+    Updates the marital status statistics with new data.
+
+    This function updates the `marital` DataFrame by adding the count of individuals 
+    aged 15 and older for each marital status category from the `persons_df`. If the 
+    `marital` DataFrame is empty, it initializes it with the current year's data. 
+    Otherwise, it appends the new data to the existing DataFrame.
+
+    Args:
+        persons_df (pd.DataFrame): DataFrame containing person-level data, 
+                                   including age and marital status.
+        marital (pd.DataFrame): DataFrame containing historical marital status data.
+        year (int): The current year for which the data is being updated.
+
+    Returns:
+        pd.DataFrame: Updated DataFrame with the new marital status counts.
+    """
     if marrital.empty:
         persons_stats = persons_df[persons_df["age"]>=15]["MAR"].value_counts().reset_index()
         marrital = pd.DataFrame(persons_stats)
@@ -1852,9 +2156,22 @@ def update_marrital_status_stats(persons_df, marrital, year):
 
 def print_household_stats(persons_df, households_df):
     """
-    Function to print the number of households from both the households and persons tables.
-    """
+    Prints statistics about households from both the persons and households tables.
 
+    This function calculates and prints the number of unique households and persons 
+    from the `persons_df` and `households_df` DataFrames. It also identifies and 
+    prints the number of missing households, as well as households with multiple 
+    heads or cohabitating individuals.
+
+    Args:
+        persons_df (pd.DataFrame): DataFrame containing person-level data, 
+                                   including household IDs and relationship status.
+        households_df (pd.DataFrame): DataFrame containing household-level data, 
+                                      indexed by household IDs.
+
+    Returns:
+        None
+    """
     # Printing households size from different tables
     print("Households size from persons table:", persons_df["household_id"].nunique())
     print("Households size from households table:", households_df.index.nunique())
@@ -1882,6 +2199,23 @@ def print_household_stats(persons_df, households_df):
     print("Households with 1 and 13:", ((persons_df_sum["relate_1"] * persons_df_sum["relate_13"]) > 0).sum())
 
 def update_married_predictions(married_table, marriage_list):
+    """
+    Updates the marriage predictions table with new data.
+
+    This function updates the `married_table` DataFrame by adding the count of 
+    newly married and cohabitating individuals from the `marriage_list`. If the 
+    `married_table` is empty, it initializes it with the current counts. Otherwise, 
+    it appends the new counts to the existing table.
+
+    Args:
+        married_table (pd.DataFrame): DataFrame containing historical marriage 
+                                      and cohabitation data.
+        marriage_list (pd.Series): Series indicating the marriage status of individuals, 
+                                   where 1 represents married and 2 represents cohabitated.
+
+    Returns:
+        pd.DataFrame: Updated DataFrame with the new marriage and cohabitation counts.
+    """
     if married_table.empty:
         married_table = pd.DataFrame(
             [[(marriage_list == 1).sum(), (marriage_list == 2).sum()]],
@@ -1897,6 +2231,21 @@ def update_married_predictions(married_table, marriage_list):
     return married_table
 
 def fetch_marriage_eligible_persons(persons_df):
+    """
+    Identifies individuals eligible for marriage.
+
+    This function filters the `persons_df` DataFrame to find individuals who are 
+    single (not married, `MAR` not equal to 1), at least 15 years old, and not 
+    currently cohabitating (not in a household with `relate` values of 0 or 13). 
+    It returns the indices of individuals who meet these criteria.
+
+    Args:
+        persons_df (pd.DataFrame): DataFrame containing person-level data, 
+                                   including relationship status and age.
+
+    Returns:
+        pd.Index: An index of individuals eligible for marriage.
+    """
     cohab_household_ids = persons_df[persons_df["relate"] == 13]["household_id"].unique()
 
     # Condition for single status
@@ -1907,19 +2256,57 @@ def fetch_marriage_eligible_persons(persons_df):
                             ((persons_df["relate"] == 0) | (persons_df["relate"] == 13)))
 
     # Get indices of eligible people
-    eligible_indices = persons_df[single_condition & non_cohab_condition].index
-    return eligible_indices
+    eligible_persons = persons_df[single_condition & non_cohab_condition].index
+    return eligible_persons
 
-def fetch_divorce_input_household_ids(persons_df):
-    ELIGIBLE_HOUSEHOLDS = list(persons_df[(persons_df["relate"].isin([0, 1])) & (persons_df["MAR"] == 1)]["household_id"].unique().astype(int))
-    sizes = (persons_df[persons_df["household_id"].isin(ELIGIBLE_HOUSEHOLDS)& (persons_df["relate"].isin([0, 1]))].groupby("household_id").size())
-    ELIGIBLE_HOUSEHOLDS = sizes[(sizes == 2)].index.to_list()
-    return ELIGIBLE_HOUSEHOLDS
+def get_divorce_eligible_household_ids(persons_df):
+    """
+    Identifies households eligible for divorce processing.
 
-def fetch_cohabitate_to_x_household_ids(persons_df):
-    ELIGIBLE_HOUSEHOLDS = (
+    This function filters the `persons_df` DataFrame to find households where 
+    there are exactly two individuals in a married relationship (indicated by 
+    `relate` values of 0 or 1 and `MAR` equal to 1). It returns a list of unique 
+    household IDs that meet these criteria, making them eligible for divorce processing.
+
+    Args:
+        persons_df (pd.DataFrame): DataFrame containing person-level data, 
+                                   including relationship status and marital status.
+
+    Returns:
+        list: A list of unique household IDs eligible for divorce processing.
+    """
+    eligible_households = list(
+        persons_df[(persons_df["relate"].isin([0, 1])) & 
+                   (persons_df["MAR"] == 1)]["household_id"].unique().astype(int)
+    )
+    sizes = (
+        persons_df[persons_df["household_id"].isin(eligible_households) & 
+                   (persons_df["relate"].isin([0, 1]))]
+        .groupby("household_id").size()
+    )
+    eligible_households = sizes[sizes == 2].index.to_list()
+    return eligible_households
+
+def get_cohabitation_to_x_eligible_households(persons_df):
+    """
+    Identifies households eligible for the cohabitation_to_x model.
+
+    This function filters the `persons_df` DataFrame to find individuals who are 
+    currently in a cohabitation relationship (indicated by `relate` value of 13), 
+    are not married (`MAR` not equal to 1), and are at least 15 years old. It 
+    returns a list of unique household IDs that meet these criteria, making them 
+    eligible for the cohabitation_to_x model.
+
+    Args:
+        persons_df (pd.DataFrame): DataFrame containing person-level data, 
+                                   including relationship status and age.
+
+    Returns:
+        np.ndarray: An array of unique household IDs eligible for the cohabitation_to_x model.
+    """
+    eligible_households = (
         persons_df[(persons_df["relate"] == 13) & \
                 (persons_df["MAR"]!=1) & \
                 ((persons_df["age"]>=15))]["household_id"].unique().astype(int)
     )
-    return ELIGIBLE_HOUSEHOLDS
+    return eligible_households
