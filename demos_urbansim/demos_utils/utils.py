@@ -766,30 +766,17 @@ def calibrate_model(model, target_count, threshold=0.05):
 
 #------------------------------------------
 
-def fix_erroneous_households(persons, households):
+def fix_erroneous_households(persons_df, households_df):
     print("Fixing erroneous households")
-    p_df = persons.local
-    household_cols = households.local_columns
-    household_df = households.local
-    persons_cols = persons.local_columns
-    households_to_drop = p_df[p_df['relate'].isin([1, 13])].groupby('household_id')['relate'].nunique().reset_index()
+    households_to_drop = persons_df[persons_df['relate'].isin([1, 13])].groupby('household_id')['relate'].nunique().reset_index()
     households_to_drop = households_to_drop[households_to_drop["relate"]==2]["household_id"].to_list()
-    household_df = household_df.drop(households_to_drop)
-    p_df = p_df[~p_df["household_id"].isin(households_to_drop)]
+    households_df = households_df.drop(households_to_drop)
+    persons_df = persons_df[~persons_df["household_id"].isin(households_to_drop)]
 
-    orca.add_table("households", household_df[household_cols])
-    orca.add_table("persons", p_df[persons_cols])
+    return persons_df, households_df
 
-    metadata = orca.get_table("metadata").to_frame()
-    max_hh_id = metadata.loc["max_hh_id", "value"]
-    max_p_id = metadata.loc["max_p_id", "value"]
-    if household_df.index.max() > max_hh_id:
-        metadata.loc["max_hh_id", "value"] = household_df.index.max()
-    if p_df.index.max() > max_p_id:
-        metadata.loc["max_p_id", "value"] = p_df.index.max()
-    orca.add_table("metadata", metadata)
 
-def update_married_households_random(persons, households, marriage_list):
+def update_married_households_random(persons_df, households_df, marriage_list, metadata):
     """
     Update the marriage status of individuals and create new households
     Args:
@@ -800,16 +787,15 @@ def update_married_households_random(persons, households, marriage_list):
         None
     """
     # print("Updating persons and households...")
-    p_df = persons.local
-    household_cols = households.local_columns
-    household_df = households.local
-    persons_cols = persons.local_columns
-    persons_local_cols = persons.local_columns
-    hh_df = households.to_frame(columns=["lcm_county_id"])
-    hh_df.reset_index(inplace=True)
-    p_df["new_mar"] = marriage_list
-    p_df["new_mar"].fillna(0, inplace=True)
-    relevant = p_df[p_df["new_mar"] > 0].copy()
+    # household_cols = households.local_columns
+    # household_df = households.local
+    # persons_cols = persons.local_columns
+    # persons_local_cols = persons.local_columns
+    hh_df = households_df[["lcm_county_id"]].copy()
+    hh_df = hh_df.reset_index()
+    persons_df["new_mar"] = marriage_list
+    persons_df["new_mar"].fillna(0, inplace=True)
+    relevant = persons_df[persons_df["new_mar"] > 0].copy()
 
     if ((relevant["new_mar"] ==1).sum() <= 10) or ((relevant["new_mar"] ==2).sum() <= 10):
         return None
@@ -817,7 +803,7 @@ def update_married_households_random(persons, households, marriage_list):
     relevant.sort_values("new_mar", inplace=True)
 
     relevant = relevant.reset_index().merge(hh_df, on=["household_id"]).set_index("person_id")
-    p_df = p_df.reset_index().merge(hh_df, on=["household_id"]).set_index("person_id")
+    persons_df = persons_df.reset_index().merge(hh_df, on=["household_id"]).set_index("person_id")
 
 
     def swap(arr):
@@ -921,37 +907,36 @@ def update_married_households_random(persons, households, marriage_list):
     final.loc[final[CONDITION_4]["partner"].values, "new_household_id"] = new_household_ids
 
     # print('Finished Pairing')
-    metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
-    current_max_id = max(max_hh_id, household_df.index.max())
+    current_max_id = max(max_hh_id, households_df.index.max())
     final["hh_new_id"] = np.where(final["stay"].isin([1]), final["household_id"], np.where(final["stay"].isin([0]),final["partner_house"],final["new_household_id"] + current_max_id + 1))
 
     # Households where head left
     household_ids_reorganized = final[(final["stay"] == 0) & (final["relate"] == 0)]["household_id"].unique()
 
-    p_df.loc[final.index, "household_id"] = final["hh_new_id"]
-    p_df.loc[final.index, "relate"] = final["new_relate"]
+    persons_df.loc[final.index, "household_id"] = final["hh_new_id"]
+    persons_df.loc[final.index, "relate"] = final["new_relate"]
 
-    households_restructuring = p_df.loc[p_df["household_id"].isin(household_ids_reorganized)]
+    households_restructuring = persons_df.loc[persons_df["household_id"].isin(household_ids_reorganized)]
 
     households_restructuring = households_restructuring.sort_values(by=["household_id", "earning"], ascending=False)
     households_restructuring.loc[households_restructuring.groupby(["household_id"]).head(1).index, "relate"] = 0
 
-    household_df = household_df.loc[household_df.index.isin(p_df["household_id"])]
+    households_df = households_df.loc[households_df.index.isin(persons_df["household_id"])]
 
-    p_df = p_df.sort_values("relate")
+    persons_df = persons_df.sort_values("relate")
 
-    p_df["person"] = 1
-    p_df["is_head"] = np.where(p_df["relate"] == 0, 1, 0)
-    p_df["race_head"] = p_df["is_head"] * p_df["race_id"]
-    p_df["age_head"] = p_df["is_head"] * p_df["age"]
-    p_df["hispanic_head"] = p_df["is_head"] * p_df["hispanic"]
-    p_df["child"] = np.where(p_df["relate"].isin([2, 3, 4, 14]), 1, 0)
-    p_df["senior"] = np.where(p_df["age"] >= 65, 1, 0)
-    p_df["age_gt55"] = np.where(p_df["age"] >= 55, 1, 0)
+    persons_df["person"] = 1
+    persons_df["is_head"] = np.where(persons_df["relate"] == 0, 1, 0)
+    persons_df["race_head"] = persons_df["is_head"] * persons_df["race_id"]
+    persons_df["age_head"] = persons_df["is_head"] * persons_df["age"]
+    persons_df["hispanic_head"] = persons_df["is_head"] * persons_df["hispanic"]
+    persons_df["child"] = np.where(persons_df["relate"].isin([2, 3, 4, 14]), 1, 0)
+    persons_df["senior"] = np.where(persons_df["age"] >= 65, 1, 0)
+    persons_df["age_gt55"] = np.where(persons_df["age"] >= 55, 1, 0)
 
-    p_df = p_df.sort_values(by=["household_id", "relate"])
-    household_agg = p_df.groupby("household_id").agg(income=("earning", "sum"),race_of_head=("race_id", "first"),age_of_head=("age", "first"),size=("person", "sum"),workers=("worker", "sum"),hispanic_head=("hispanic_head", "sum"),persons_age_gt55=("age_gt55", "sum"),seniors=("senior", "sum"),children=("child", "sum"),persons=("person", "sum"),)
+    persons_df = persons_df.sort_values(by=["household_id", "relate"])
+    household_agg = persons_df.groupby("household_id").agg(income=("earning", "sum"),race_of_head=("race_id", "first"),age_of_head=("age", "first"),size=("person", "sum"),workers=("worker", "sum"),hispanic_head=("hispanic_head", "sum"),persons_age_gt55=("age_gt55", "sum"),seniors=("senior", "sum"),children=("child", "sum"),persons=("person", "sum"),)
 
     # household_agg["lcm_county_id"] = household_agg["lcm_county_id"]
     household_agg["gt55"] = np.where(household_agg["persons_age_gt55"] > 0, 1, 0)
@@ -995,13 +980,13 @@ def update_married_households_random(persons, households, marriage_list):
         ),
     )
 
-    household_df.update(household_agg)
+    households_df.update(household_agg)
 
     final["MAR"] = np.where(final["new_mar"] == 2, 1, final["MAR"])
-    p_df["NEW_MAR"] = final["MAR"]
-    p_df["MAR"] = np.where(p_df["NEW_MAR"].isna(),p_df["MAR"], p_df["NEW_MAR"])
+    persons_df["NEW_MAR"] = final["MAR"]
+    persons_df["MAR"] = np.where(persons_df["NEW_MAR"].isna(),persons_df["MAR"], persons_df["NEW_MAR"])
 
-    new_hh = household_agg.loc[~household_agg.index.isin(household_df.index.unique())].copy()
+    new_hh = household_agg.loc[~household_agg.index.isin(households_df.index.unique())].copy()
     new_hh["serialno"] = "-1"
     new_hh["cars"] = np.random.choice([0, 1, 2], size=new_hh.shape[0])
     new_hh["hispanic_status_of_head"] = "-1"
@@ -1014,37 +999,13 @@ def update_married_households_random(persons, households, marriage_list):
     new_hh["tenure_mover"] = "-1"
     new_hh["block_id"] = "-1"
     new_hh["hh_type"] = "-1"
-    household_df = pd.concat([household_df, new_hh])
+    households_df = pd.concat([households_df, new_hh])
+
+    return persons_df, households_df
 
     # print('Time to run marriage', sp.duration)
-    orca.add_table("households", household_df[household_cols])
-    orca.add_table("persons", p_df[persons_cols])
-
-    # print("households size", household_df.shape[0])
-    metadata = orca.get_table("metadata").to_frame()
-    max_hh_id = metadata.loc["max_hh_id", "value"]
-    max_p_id = metadata.loc["max_p_id", "value"]
-    if household_df.index.max() > max_hh_id:
-        metadata.loc["max_hh_id", "value"] = household_df.index.max()
-    if p_df.index.max() > max_p_id:
-        metadata.loc["max_p_id", "value"] = p_df.index.max()
-    orca.add_table("metadata", metadata)
-    
-    married_table = orca.get_table("marriage_table").to_frame()
-    if married_table.empty:
-        married_table = pd.DataFrame(
-            [[(marriage_list == 1).sum(), (marriage_list == 2).sum()]],
-            columns=["married", "cohabitated"],
-        )
-    else:
-        new_married_table = pd.DataFrame(
-                [[(marriage_list == 1).sum(), (marriage_list == 2).sum()]],
-                columns=["married", "cohabitated"]
-            )
-        married_table = pd.concat([married_table, new_married_table],
-                                  ignore_index=True)
-
-    orca.add_table("marriage_table", married_table)
+    # orca.add_table("households", household_df[household_cols])
+    # orca.add_table("persons", p_df[persons_cols])
 
 def update_married_households(persons, households, marriage_list):
     """
@@ -1404,7 +1365,7 @@ def update_married_households(persons, households, marriage_list):
         )
     orca.add_table("marriage_table", married_table)
 
-def update_cohabitating_households(persons, households, cohabitate_list):
+def update_cohabitating_households(persons_df, households_df, cohabitate_list, metadata):
     """
     Updating households and persons after cohabitation model.
 
@@ -1416,10 +1377,12 @@ def update_cohabitating_households(persons, households, cohabitate_list):
     Returns:
         None
     """
-    persons_df = orca.get_table("persons").local
-    persons_local_cols = persons_df.columns
-    households_df = orca.get_table("households").local
-    hh_df = households.to_frame(columns=["lcm_county_id"])
+    # persons_df = orca.get_table("persons").local
+    # persons_local_cols = persons_df.columns
+    # households_df = orca.get_table("households").local
+    # hh_df = households.to_frame(columns=["lcm_county_id"])
+    hh_df = households_df[["lcm_county_id"]].copy()
+    hh_df = hh_df.reset_index()
     households_local_cols = households_df.columns
     married_hh = cohabitate_list.index[cohabitate_list == 2].to_list()
     breakup_hh = cohabitate_list.index[cohabitate_list == 1].to_list()
@@ -1490,10 +1453,8 @@ def update_cohabitating_households(persons, households, cohabitate_list):
             np.where(households_new["persons"] == 3, "three", "four or more"),
         ),
     )
-
     households_df.update(households_new)
 
-    metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
     # Create household characteristics for new households formed
     leaving_house["household_id"] = (
@@ -1567,7 +1528,6 @@ def update_cohabitating_households(persons, households, cohabitate_list):
             np.where(households_new["race_of_head"].isin([6, 7]), "asian", "other"),
         ),
     )
-
     households_new["hh_size"] = np.where(
         households_new["persons"] == 1,
         "one",
@@ -1577,7 +1537,6 @@ def update_cohabitating_households(persons, households, cohabitate_list):
             np.where(households_new["persons"] == 3, "three", "four or more"),
         ),
     )
-
     households_new["cars"] = np.random.choice([0, 1], size=households_new.shape[0])
     households_new["hh_cars"] = np.where(
         households_new["cars"] == 0,
@@ -1593,21 +1552,10 @@ def update_cohabitating_households(persons, households, cohabitate_list):
     households_df = pd.concat([households_df, households_new])
 
     persons_df = pd.concat([persons_df, leaving_house])
-
     
-    # add to orca
-    orca.add_table("households", households_df[households_local_cols])
-    orca.add_table("persons", persons_df[persons_local_cols])
-    metadata = orca.get_table("metadata").to_frame()
-    max_hh_id = metadata.loc["max_hh_id", "value"]
-    max_p_id = metadata.loc["max_p_id", "value"]
-    if households_df.index.max() > max_hh_id:
-        metadata.loc["max_hh_id", "value"] = households_df.index.max()
-    if persons_df.index.max() > max_p_id:
-        metadata.loc["max_p_id", "value"] = persons_df.index.max()
-    orca.add_table("metadata", metadata)
+    return persons_df, households_df
 
-def update_divorce(divorce_list):
+def update_divorce(persons_df, households_df, divorce_list, metadata):
     """
     Updating stats for divorced households
 
@@ -1620,13 +1568,13 @@ def update_divorce(divorce_list):
         None
     """
     # print("Updating household stats...")
-    households_local_cols = orca.get_table("households").local.columns
+    # households_local_cols = orca.get_table("households").local.columns
 
-    persons_local_cols = orca.get_table("persons").local.columns
+    # persons_local_cols = orca.get_table("persons").local.columns
 
-    households_df = orca.get_table("households").local
+    # households_df = orca.get_table("households").local
 
-    persons_df = orca.get_table("persons").local
+    # persons_df = orca.get_table("persons").local
 
     households_df.loc[divorce_list.index,"divorced"] = divorce_list
 
@@ -1649,7 +1597,7 @@ def update_divorce(divorce_list):
 
     staying_house = persons_divorce[~(persons_divorce.index.isin(leaving_house.index))].copy()
 
-    metadata = orca.get_table("metadata").to_frame()
+    # metadata = orca.get_table("metadata").to_frame()
     max_hh_id = metadata.loc["max_hh_id", "value"]
     # give the people leaving a new household id, update their marriage status, and other variables
     leaving_house["relate"] = 0
@@ -1872,36 +1820,25 @@ def update_divorce(divorce_list):
     households_df.update(staying_household_agg)
 
     hh_ids_p_table = np.hstack((staying_house["household_id"].unique(), leaving_house["household_id"].unique()))
-    df_p = persons_df.combine_first(staying_house[persons_local_cols])
-    df_p = df_p.combine_first(leaving_house[persons_local_cols])
+    df_p = persons_df.combine_first(staying_house)
+    df_p = df_p.combine_first(leaving_house)
     hh_ids_hh_table = np.hstack((households_df.index, household_agg.index))
 
     # merge all in one persons and households table
-    new_households = pd.concat([households_df[households_local_cols], household_agg[households_local_cols]])
-    persons_df.update(staying_house[persons_local_cols])
-    persons_df.update(leaving_house[persons_local_cols])
+    new_households = pd.concat([households_df, household_agg])
+    persons_df.update(staying_house)
+    persons_df.update(leaving_house)
 
-    orca.add_table("households", new_households[households_local_cols])
-    orca.add_table("persons", persons_df[persons_local_cols])
+    return persons_df, new_households
 
-    
-    metadata = orca.get_table("metadata").to_frame()
-    max_hh_id = metadata.loc["max_hh_id", "value"]
-    max_p_id = metadata.loc["max_p_id", "value"]
-    if new_households.index.max() > max_hh_id:
-        metadata.loc["max_hh_id", "value"] = new_households.index.max()
-    if persons_df.index.max() > max_p_id:
-        metadata.loc["max_p_id", "value"] = persons_df.index.max()
-    orca.add_table("metadata", metadata)
 
-    # print("Updating divorce metrics...")
-    divorce_table = orca.get_table("divorce_table").to_frame()
+def update_divorce_predictions(divorce_table, divorce_list):
     if divorce_table.empty:
         divorce_table = pd.DataFrame([divorce_list.sum()], columns=["divorced"])
     else:
         new_divorce = pd.DataFrame([divorce_list.sum()], columns=["divorced"])
         divorce_table = pd.concat([divorce_table, new_divorce], ignore_index=True)
-    orca.add_table("divorce_table", divorce_table)
+    return divorce_table
 
 def update_marrital_status_stats(persons_df, marrital, year):
     if marrital.empty:
@@ -1914,3 +1851,77 @@ def update_marrital_status_stats(persons_df, marrital, year):
         new_marrital["year"] = year
         marrital = pd.concat([marrital, new_marrital])
     return marrital
+
+def print_household_stats(persons_df, households_df):
+    """
+    Function to print the number of households from both the households and persons tables.
+    """
+
+    # Printing households size from different tables
+    print("Households size from persons table:", persons_df["household_id"].nunique())
+    print("Households size from households table:", households_df.index.nunique())
+    print("Persons Size:", persons_df.index.nunique())
+
+    # Missing households
+    missing_households = set(persons_df["household_id"].unique()) - set(households_df.index.unique())
+    print("Missing hh:", len(missing_households))
+
+    # Calculating relationships
+    persons_df["relate_0"] = np.where(persons_df["relate"] == 0, 1, 0)
+    persons_df["relate_1"] = np.where(persons_df["relate"] == 1, 1, 0)
+    persons_df["relate_13"] = np.where(persons_df["relate"] == 13, 1, 0)
+    
+    persons_df_sum = persons_df.groupby("household_id").agg(
+        relate_1=("relate_1", "sum"),
+        relate_13=("relate_13", "sum"),
+        relate_0=("relate_0", "sum")
+    )
+
+    # Printing statistics about households
+    print("Households with multiple 0:", (persons_df_sum["relate_0"] > 1).sum())
+    print("Households with multiple 1:", (persons_df_sum["relate_1"] > 1).sum())
+    print("Households with multiple 13:", (persons_df_sum["relate_13"] > 1).sum())
+    print("Households with 1 and 13:", ((persons_df_sum["relate_1"] * persons_df_sum["relate_13"]) > 0).sum())
+
+def update_married_predictions(married_table, marriage_list):
+    if married_table.empty:
+        married_table = pd.DataFrame(
+            [[(marriage_list == 1).sum(), (marriage_list == 2).sum()]],
+            columns=["married", "cohabitated"],
+        )
+    else:
+        new_married_table = pd.DataFrame(
+                [[(marriage_list == 1).sum(), (marriage_list == 2).sum()]],
+                columns=["married", "cohabitated"]
+            )
+        married_table = pd.concat([married_table, new_married_table],
+                                  ignore_index=True)
+    return married_table
+
+def fetch_marriage_eligible_persons(persons_df):
+    cohab_household_ids = persons_df[persons_df["relate"] == 13]["household_id"].unique()
+
+    # Condition for single status
+    single_condition = (persons_df["MAR"] != 1) & (persons_df["age"] >= 15)
+
+    # Condition for non-cohabitation
+    non_cohab_condition = ~((persons_df["household_id"].isin(cohab_household_ids)) & 
+                            ((persons_df["relate"] == 0) | (persons_df["relate"] == 13)))
+
+    # Get indices of eligible people
+    eligible_indices = persons_df[single_condition & non_cohab_condition].index
+    return eligible_indices
+
+def fetch_divorce_input_household_ids(persons_df):
+    ELIGIBLE_HOUSEHOLDS = list(persons_df[(persons_df["relate"].isin([0, 1])) & (persons_df["MAR"] == 1)]["household_id"].unique().astype(int))
+    sizes = (persons_df[persons_df["household_id"].isin(ELIGIBLE_HOUSEHOLDS)& (persons_df["relate"].isin([0, 1]))].groupby("household_id").size())
+    ELIGIBLE_HOUSEHOLDS = sizes[(sizes == 2)].index.to_list()
+    return ELIGIBLE_HOUSEHOLDS
+
+def fetch_cohabitate_to_x_household_ids(persons_df):
+    ELIGIBLE_HOUSEHOLDS = (
+        persons_df[(persons_df["relate"] == 13) & \
+                (persons_df["MAR"]!=1) & \
+                ((persons_df["age"]>=15))]["household_id"].unique().astype(int)
+    )
+    return ELIGIBLE_HOUSEHOLDS
