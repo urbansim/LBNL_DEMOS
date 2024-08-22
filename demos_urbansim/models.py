@@ -365,7 +365,7 @@ def birth_model(persons, households, year):
     print(birth_list.sum(), " predicted")
 
     # Update persons and households
-    persons_df, households_df = update_birth(persons_df, households_df, birth_list)
+    persons_df, households_df = update_birth(persons_df, households_df, birth_list, metadata)
 
     # Update births predictions table
     btable_df = update_births_predictions_table(btable_df, year, birth_list)
@@ -422,8 +422,6 @@ def households_reorg(persons, households, year):
     """Runs the household reorganization models,
     more specifically: Single-to-X, Married-to-X,
     Cohabitation-to-X
-
-
     Args:
         persons (Orca table): Persons orca table
         households (Orca table): Households orca table

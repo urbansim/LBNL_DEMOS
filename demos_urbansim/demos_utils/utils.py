@@ -179,7 +179,7 @@ def get_birth_eligible_households(persons_df, households_df):
     eligible_household_ids = households_df.loc[ELIGIBLE_HH].index.to_list()
     return eligible_household_ids
 
-def update_birth(persons_df, households_df, birth_list):
+def update_birth(persons_df, households_df, birth_list, metadata):
     """
     Update the persons tables with newborns and household sizes
 
@@ -200,8 +200,6 @@ def update_birth(persons_df, households_df, birth_list):
     grave = orca.get_table("pop_over_time").to_frame()
 
     # If not empty, update the highest index with max index of all people
-    metadata = orca.get_table("metadata").to_frame()
-
     max_p_id = metadata.loc["max_p_id", "value"]
 
     highest_index = max(max_p_id, highest_index)
