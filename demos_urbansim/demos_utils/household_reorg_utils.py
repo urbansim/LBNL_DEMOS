@@ -715,7 +715,7 @@ def process_cohabitation_breakups(persons_df, cohabitate_list, metadata):
     # Remove leaving persons from the original DataFrame
     persons_df = persons_df[~leaving_mask]
 
-    max_hh_id = max(metadata.loc["max_hh_id", "value"], households_df.index.max())
+    max_hh_id = max(metadata.loc["max_hh_id", "value"], persons_df["household_id"].max())
     leaving_house["household_id"] = np.arange(len(leaving_house)) + max_hh_id + 1
     return persons_df, leaving_house
 
@@ -753,10 +753,64 @@ def update_cohabitating_households(persons_df, households_df, cohabitate_list, m
     households_df.update(existing_households)
     leaving_house, new_households = aggregate_household_data(leaving_house, households_df)
 
-    households_df = pd.concat([households_df, households_new])
+    households_df = pd.concat([households_df, new_households])
     persons_df = pd.concat([persons_df, leaving_house])
     
     return persons_df, households_df
+
+def identify_divorce_outcomes(persons_df, divorcing_household_ids, metadata):
+    """
+    Identifies persons staying in and leaving households undergoing divorce.
+
+    Args:
+        persons_df (pd.DataFrame): DataFrame containing person-level data.
+        divorcing_household_ids (pd.Index or list): IDs of households undergoing divorce.
+
+    Returns:
+        tuple: (staying_persons, leaving_persons)
+            - staying_persons (pd.DataFrame): Persons staying in their households after divorce.
+            - leaving_persons (pd.DataFrame): Persons leaving their households due to divorce.
+    """
+    # Get persons in divorcing households
+    persons_in_divorcing_households = persons_df[persons_df["household_id"].isin(divorcing_household_ids)]
+
+    # Identify married couples
+    married_couples = persons_in_divorcing_households[
+        (persons_in_divorcing_households["relate"].isin([0, 1])) & 
+        (persons_in_divorcing_households["MAR"] == 1)
+    ]
+
+    # Randomly select one person from each couple to leave
+    leaving_persons = married_couples.groupby("household_id").sample(n=1)
+
+    # Identify persons staying (including non-couple members)
+    staying_persons = persons_in_divorcing_households[
+        ~persons_in_divorcing_households.index.isin(leaving_persons.index)
+    ]
+
+    max_hh_id = metadata.loc["max_hh_id", "value"]
+
+        # give the people leaving a new household id, update their marriage status, and other variables
+    leaving_persons["relate"] = 0
+    leaving_persons["MAR"] = 3
+    leaving_persons["member_id"] = 1
+    
+    leaving_persons["household_id"] = (
+        np.arange(leaving_persons.shape[0]) + max_hh_id + 1
+    )
+    staying_persons["relate"] = np.where(
+        staying_persons["relate"].isin([1, 0]), 0, staying_persons["relate"]
+    )
+    staying_persons["member_id"] = np.where(
+        staying_persons["member_id"] != 1,
+        staying_persons["member_id"] - 1,
+        staying_persons["relate"],
+    )
+    staying_persons["MAR"] = np.where(
+        staying_persons["MAR"] == 1, 3, staying_persons["MAR"]
+    )
+
+    return staying_persons, leaving_persons
 
 def update_divorce(persons_df, households_df, divorce_list, metadata):
     """
@@ -781,260 +835,20 @@ def update_divorce(persons_df, households_df, divorce_list, metadata):
         tuple: Updated `persons_df` and `households_df` reflecting the divorce events.
     """
     households_df.loc[divorce_list.index,"divorced"] = divorce_list
-
-    divorce_households = households_df[households_df["divorced"] == 1].copy()
-    DIVORCED_HOUSEHOLDS_ID = divorce_households.index.to_list()
-
-    sizes = persons_df[persons_df["household_id"].isin(divorce_list.index) & (persons_df["relate"].isin([0, 1]))].groupby("household_id").size()
-
-
-    persons_divorce = persons_df[
-        persons_df["household_id"].isin(divorce_households.index)
-    ].copy()
-
-
-    divorced_parents = persons_divorce[
-        (persons_divorce["relate"].isin([0, 1])) & (persons_divorce["MAR"] == 1)
-    ].copy()
-
-    leaving_house = divorced_parents.groupby("household_id").sample(n=1)
-
-    staying_house = persons_divorce[~(persons_divorce.index.isin(leaving_house.index))].copy()
-
-    # metadata = orca.get_table("metadata").to_frame()
-    max_hh_id = metadata.loc["max_hh_id", "value"]
-    # give the people leaving a new household id, update their marriage status, and other variables
-    leaving_house["relate"] = 0
-    leaving_house["MAR"] = 3
-    leaving_house["member_id"] = 1
-    leaving_house["household_id"] = (
-        np.arange(leaving_house.shape[0]) + max_hh_id + 1
-    )
-
-    # modify necessary variables for members staying in household
-    staying_house["relate"] = np.where(
-        staying_house["relate"].isin([1, 0]), 0, staying_house["relate"]
-    )
-    staying_house["member_id"] = np.where(
-        staying_house["member_id"] != 1,
-        staying_house["member_id"] - 1,
-        staying_house["relate"],
-    )
-    staying_house["MAR"] = np.where(
-        staying_house["MAR"] == 1, 3, staying_house["MAR"]
-    )
-
+    divorcing_household_ids = households_df[households_df["divorced"] == 1].index.to_list()
+    # Identify staying and leaving persons
+    staying_persons_df, departing_spouses_df = identify_divorce_outcomes(persons_df, divorcing_household_ids, metadata)
     # initiate new households with individuals leaving house
     # TODO: DISCUSS ALL THESE INITIALIZATION MEASURES
-    staying_households = staying_house.copy()
-    staying_households["person"] = 1
-    staying_households["is_head"] = np.where(staying_households["relate"] == 0, 1, 0)
-    staying_households["race_head"] = (
-        staying_households["is_head"] * staying_households["race_id"]
-    )
-    staying_households["age_head"] = (
-        staying_households["is_head"] * staying_households["age"]
-    )
-    staying_households["hispanic_head"] = (
-        staying_households["is_head"] * staying_households["hispanic"]
-    )
-    staying_households["child"] = np.where(
-        staying_households["relate"].isin([2, 3, 4, 14]), 1, 0
-    )
-    staying_households["senior"] = np.where(staying_households["age"] >= 65, 1, 0)
-    staying_households["age_gt55"] = np.where(staying_households["age"] >= 55, 1, 0)
+    staying_persons_df, staying_households_df = aggregate_household_data(staying_persons_df, households_df)
+    departing_spouses_df, new_households_df = aggregate_household_data(departing_spouses_df, households_df, initialize_new_households=True)
+    #staying_households_df.index.name = "household_id"
+    households_df.update(staying_households_df)
+    households_df = pd.concat([households_df, new_households_df])
+    persons_df.update(staying_persons_df)
+    persons_df.update(departing_spouses_df)
 
-    staying_households = staying_households.sort_values(by=["household_id", "relate"])
-    staying_household_agg = staying_households.groupby("household_id").agg(
-        income=("earning", "sum"),
-        race_of_head=("race_id", "first"),
-        age_of_head=("age", "first"),
-        size=("person", "sum"),
-        workers=("worker", "sum"),
-        hispanic_head=("hispanic_head", "sum"),
-        persons_age_gt55=("age_gt55", "sum"),
-        seniors=("senior", "sum"),
-        children=("child", "sum"),
-        persons=("person", "sum"),
-    )
-
-    # household_agg["lcm_county_id"] = household_agg["lcm_county_id"]
-    staying_household_agg["gt55"] = np.where(
-        staying_household_agg["persons_age_gt55"] > 0, 1, 0
-    )
-    staying_household_agg["gt2"] = np.where(staying_household_agg["persons"] > 2, 1, 0)
-
-    staying_household_agg["hh_workers"] = np.where(
-        staying_household_agg["workers"] == 0,
-        "none",
-        np.where(staying_household_agg["workers"] == 1, "one", "two or more"),
-    )
-    staying_household_agg["hh_age_of_head"] = np.where(
-        staying_household_agg["age_of_head"] < 35,
-        "lt35",
-        np.where(staying_household_agg["age_of_head"] < 65, "gt35-lt65", "gt65"),
-    )
-    staying_household_agg["hh_race_of_head"] = np.where(
-        staying_household_agg["race_of_head"] == 1,
-        "white",
-        np.where(
-            staying_household_agg["race_of_head"] == 2,
-            "black",
-            np.where(
-                staying_household_agg["race_of_head"].isin([6, 7]), "asian", "other"
-            ),
-        ),
-    )
-    staying_household_agg["hispanic_head"] = np.where(
-        staying_household_agg["hispanic_head"] == 1, "yes", "no"
-    )
-    staying_household_agg["hh_size"] = np.where(
-        staying_household_agg["size"] == 1,
-        "one",
-        np.where(
-            staying_household_agg["size"] == 2,
-            "two",
-            np.where(staying_household_agg["size"] == 3, "three", "four or more"),
-        ),
-    )
-    staying_household_agg["hh_children"] = np.where(
-        staying_household_agg["children"] >= 1, "yes", "no"
-    )
-    staying_household_agg["hh_seniors"] = np.where(
-        staying_household_agg["seniors"] >= 1, "yes", "no"
-    )
-    staying_household_agg["hh_income"] = np.where(
-        staying_household_agg["income"] < 30000,
-        "lt30",
-        np.where(
-            staying_household_agg["income"] < 60,
-            "gt30-lt60",
-            np.where(
-                staying_household_agg["income"] < 100,
-                "gt60-lt100",
-                np.where(staying_household_agg["income"] < 150, "gt100-lt150", "gt150"),
-            ),
-        ),
-    )
-
-    staying_household_agg.index.name = "household_id"
-
-    # initiate new households with individuals leaving house
-    # TODO: DISCUSS ALL THESE INITIALIZATION MEASURES
-    new_households = leaving_house.copy()
-    
-    new_households["person"] = 1
-    new_households["is_head"] = np.where(new_households["relate"] == 0, 1, 0)
-    new_households["race_head"] = new_households["is_head"] * new_households["race_id"]
-    new_households["age_head"] = new_households["is_head"] * new_households["age"]
-    new_households["hispanic_head"] = (
-        new_households["is_head"] * new_households["hispanic"]
-    )
-    new_households["child"] = np.where(
-        new_households["relate"].isin([2, 3, 4, 14]), 1, 0
-    )
-    new_households["senior"] = np.where(new_households["age"] >= 65, 1, 0)
-    new_households["age_gt55"] = np.where(new_households["age"] >= 55, 1, 0)
-
-    new_households = new_households.sort_values(by=["household_id", "relate"])
-    household_agg = new_households.groupby("household_id").agg(
-        income=("earning", "sum"),
-        race_of_head=("race_head", "sum"),
-        age_of_head=("age_head", "sum"),
-        size=("person", "sum"),
-        workers=("worker", "sum"),
-        hispanic_head=("hispanic_head", "sum"),
-        persons_age_gt55=("age_gt55", "sum"),
-        seniors=("senior", "sum"),
-        children=("child", "sum"),
-        persons=("person", "sum"),
-    )
-    household_agg["hh_age_of_head"] = np.where(
-        household_agg["age_of_head"] < 35,
-        "lt35",
-        np.where(household_agg["age_of_head"] < 65, "gt35-lt65", "gt65"),
-    )
-    household_agg["hh_race_of_head"] = np.where(
-        household_agg["race_of_head"] == 1,
-        "white",
-        np.where(
-            household_agg["race_of_head"] == 2,
-            "black",
-            np.where(household_agg["race_of_head"].isin([6, 7]), "asian", "other"),
-        ),
-    )
-    household_agg["hispanic_head"] = np.where(
-        household_agg["hispanic_head"] == 1, "yes", "no"
-    )
-    household_agg["hispanic_status_of_head"] = np.where(
-        household_agg["hispanic_head"] == "yes", 1, 0
-    )
-    household_agg["hh_size"] = np.where(
-        household_agg["size"] == 1,
-        "one",
-        np.where(
-            household_agg["size"] == 2,
-            "two",
-            np.where(household_agg["size"] == 3, "three", "four or more"),
-        ),
-    )
-    household_agg["hh_children"] = np.where(household_agg["children"] >= 1, "yes", "no")
-    household_agg["hh_income"] = np.where(
-        household_agg["income"] < 30000,
-        "lt30",
-        np.where(
-            household_agg["income"] < 60,
-            "gt30-lt60",
-            np.where(
-                household_agg["income"] < 100,
-                "gt60-lt100",
-                np.where(household_agg["income"] < 150, "gt100-lt150", "gt150"),
-            ),
-        ),
-    )
-    household_agg["hh_workers"] = np.where(
-        household_agg["workers"] == 0,
-        "none",
-        np.where(household_agg["workers"] == 1, "one", "two or more"),
-    )
-
-    household_agg["hh_seniors"] = np.where(household_agg["seniors"] >= 1, "yes", "no")
-
-    household_agg["gt55"] = np.where(household_agg["persons_age_gt55"] > 0, 1, 0)
-    household_agg["gt2"] = np.where(household_agg["persons"] > 2, 1, 0)
-    household_agg["sf_detached"] = "unknown"
-    household_agg["serialno"] = "unknown"
-    household_agg["tenure"] = "unknown"
-    household_agg["tenure_mover"] = "unknown"
-    household_agg["recent_mover"] = "unknown"
-    household_agg["cars"] = np.random.choice([0, 1], size=household_agg.shape[0])
-
-    household_agg["hh_cars"] = np.where(
-        household_agg["cars"] == 0,
-        "none",
-        np.where(household_agg["cars"] == 1, "one", "two or more"),
-    )
-    household_agg["block_id"] = "-1"
-    household_agg["lcm_county_id"] = "-1"
-    household_agg["hh_type"] = 1
-    household_agg["household_type"] = 1
-    household_agg["serialno"] = "-1"
-    household_agg["birth"] = -99
-    household_agg["divorced"] = -99
-
-    households_df.update(staying_household_agg)
-
-    hh_ids_p_table = np.hstack((staying_house["household_id"].unique(), leaving_house["household_id"].unique()))
-    df_p = persons_df.combine_first(staying_house)
-    df_p = df_p.combine_first(leaving_house)
-    hh_ids_hh_table = np.hstack((households_df.index, household_agg.index))
-
-    # merge all in one persons and households table
-    new_households = pd.concat([households_df, household_agg])
-    persons_df.update(staying_house)
-    persons_df.update(leaving_house)
-
-    return persons_df, new_households
+    return persons_df, households_df
 
 def update_divorce_predictions(divorce_table, divorce_list):
     """

@@ -190,6 +190,7 @@ def aggregate_household_data(persons_df, households_df, initialize_new_household
     agg_households["gt55"] = np.where(agg_households["age_gt55"] > 0, 1, 0)
     agg_households["gt2"] = np.where(agg_households["persons"] > 2, 1, 0)
 
+    #TODO: WHICH ONES SHOULD BE INITIALIZED BY -1?
     if initialize_new_households:
         agg_households["hh_cars"] = np.where(
             agg_households["cars"] == 0,
