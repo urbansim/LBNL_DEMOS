@@ -209,21 +209,17 @@ if "metadata" not in orca.list_tables():
     store["metadata"] = metadata
     store.close()
 
+# Adding location indicator columns to persons table
 persons = orca.get_table("persons").local
-# breakpoint()
-print(persons.columns)
 persons["work_block_id"] = "-1"
 persons["workplace_taz"] = "-1"
 persons["school_id"] = "-1"
 persons["school_block_id"] = "-1"
 persons["school_taz"] = "-1"
-
 orca.add_table("persons", persons)
 
-# breakpoint()
 
 # Getting income distribution
-
 persons = orca.get_table("persons").local
 # Define the intervals for age and education
 age_intervals = [0, 20, 30, 40, 50, 65, 900]

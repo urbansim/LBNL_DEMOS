@@ -8,6 +8,7 @@ def remove_deceased_houseolds(persons_df, households_df):
         household_size=("dead", "size"),
         num_dead=("dead", "sum")
     )
+    
     dead_households = household_mortality_stats_df.query("household_size == num_dead").index.unique()
     grave_persons = persons_df[persons_df["household_id"].isin(dead_households)].copy()
     # Remove from persons table

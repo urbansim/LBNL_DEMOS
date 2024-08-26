@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from demos_utils.utils import aggregate_household_data
 
 def get_marriage_eligible_persons(persons_df):
     """
@@ -81,6 +82,7 @@ def get_cohabitation_to_x_eligible_households(persons_df):
                 ((persons_df["age"]>=15))]["household_id"].unique().astype(int)
     )
     return eligible_households
+
 def update_married_households_random(persons_df, households_df, marriage_list, metadata):
     """
     Update the marriage status of individuals and create new households.
@@ -246,7 +248,17 @@ def update_married_households_random(persons_df, households_df, marriage_list, m
     persons_df["age_gt55"] = np.where(persons_df["age"] >= 55, 1, 0)
 
     persons_df = persons_df.sort_values(by=["household_id", "relate"])
-    household_agg = persons_df.groupby("household_id").agg(income=("earning", "sum"),race_of_head=("race_id", "first"),age_of_head=("age", "first"),size=("person", "sum"),workers=("worker", "sum"),hispanic_head=("hispanic_head", "sum"),persons_age_gt55=("age_gt55", "sum"),seniors=("senior", "sum"),children=("child", "sum"),persons=("person", "sum"),)
+    household_agg = persons_df.groupby("household_id").agg(
+        income=("earning", "sum"),
+        race_of_head=("race_id", "first"),
+        age_of_head=("age", "first"),
+        size=("person", "sum"),
+        workers=("worker", "sum"),
+        hispanic_head=("hispanic_head", "sum"),
+        persons_age_gt55=("age_gt55", "sum"),
+        seniors=("senior", "sum"),
+        children=("child", "sum"),
+        persons=("person", "sum"),)
 
     # household_agg["lcm_county_id"] = household_agg["lcm_county_id"]
     household_agg["gt55"] = np.where(household_agg["persons_age_gt55"] > 0, 1, 0)
@@ -671,6 +683,42 @@ def update_married_households(persons, households, marriage_list):
         )
     orca.add_table("marriage_table", married_table)
 
+def process_cohabitation_to_marriage(persons_df, cohabitation_to_marriage):
+    married_condition = persons_df["household_id"].isin(cohabitation_to_marriage)
+    persons_df.loc[married_condition & (persons_df["relate"] == 13), "relate"] = 1
+    persons_df.loc[married_condition & (persons_df["relate"].isin([1, 0])), "MAR"] = 1
+    return persons_df
+
+def process_cohabitation_breakups(persons_df, cohabitate_list, metadata):
+    """
+    Process households where cohabitation is ending.
+
+    Args:
+        persons_df (pd.DataFrame): DataFrame containing person-level data.
+        cohabitate_list (pd.Series): Series indicating households undergoing cohabitation changes.
+
+    Returns:
+        tuple: Updated persons_df and DataFrame of persons leaving their households.
+    """
+    # Identify households breaking up
+    breakup_hh = cohabitate_list.index[cohabitate_list == 1].tolist()
+
+    # Create a boolean mask for the leaving persons
+    leaving_mask = (persons_df["household_id"].isin(breakup_hh)) & (persons_df["relate"] == 13)
+
+    # Extract leaving persons
+    leaving_house = persons_df[leaving_mask].copy()
+    
+    # Update the status of leaving persons
+    leaving_house["relate"] = 0
+
+    # Remove leaving persons from the original DataFrame
+    persons_df = persons_df[~leaving_mask]
+
+    max_hh_id = max(metadata.loc["max_hh_id", "value"], households_df.index.max())
+    leaving_house["household_id"] = np.arange(len(leaving_house)) + max_hh_id + 1
+    return persons_df, leaving_house
+
 def update_cohabitating_households(persons_df, households_df, cohabitate_list, metadata):
     """
     Updates the persons and households dataframes to reflect changes due to cohabitation events.
@@ -690,180 +738,22 @@ def update_cohabitating_households(persons_df, households_df, cohabitate_list, m
     Returns:
         tuple: Updated `persons_df` and `households_df` reflecting the cohabitation events.
     """
-    # persons_df = orca.get_table("persons").local
-    # persons_local_cols = persons_df.columns
-    # households_df = orca.get_table("households").local
-    # hh_df = households.to_frame(columns=["lcm_county_id"])
-    hh_df = households_df[["lcm_county_id"]].copy()
-    hh_df = hh_df.reset_index()
+    # Incorporate lcm_county_id into persons_df
+    persons_df = persons_df.reset_index().set_index("household_id")
+    persons_df["lcm_county_id"] = households_df["lcm_county_id"]
+    persons_df = persons_df.reset_index().set_index("person_id")
+
     households_local_cols = households_df.columns
-    married_hh = cohabitate_list.index[cohabitate_list == 2].to_list()
-    breakup_hh = cohabitate_list.index[cohabitate_list == 1].to_list()
+    # Get the list of households undergoing cohabitation to marriage
+    cohabitation_to_marriage = cohabitate_list.index[cohabitate_list == 2].to_list()
+    persons_df = process_cohabitation_to_marriage(persons_df, cohabitation_to_marriage)
+    persons_df, leaving_house = process_cohabitation_breakups(persons_df, cohabitate_list, metadata)
 
-    persons_df.loc[(persons_df["household_id"].isin(married_hh)) & (persons_df["relate"] == 13),"relate",] = 1
-    persons_df.loc[(persons_df["household_id"].isin(married_hh)) & (persons_df["relate"].isin([1, 0])),"MAR"] = 1
+    persons_df, existing_households = aggregate_household_data(persons_df, households_df)
+    households_df.update(existing_households)
+    leaving_house, new_households = aggregate_household_data(leaving_house, households_df)
 
-    persons_df = (persons_df.reset_index().merge(hh_df, on=["household_id"]).set_index("person_id"))
-
-    leaving_person_index = persons_df.index[(persons_df["household_id"].isin(breakup_hh)) & (persons_df["relate"] == 13)]
-
-    leaving_house = persons_df.loc[leaving_person_index].copy()
-
-    leaving_house["relate"] = 0
-
-    persons_df = persons_df.drop(leaving_person_index)
-
-    # Update characteristics for households staying
-    persons_df["person"] = 1
-    persons_df["is_head"] = np.where(persons_df["relate"] == 0, 1, 0)
-    persons_df["race_head"] = persons_df["is_head"] * persons_df["race_id"]
-    persons_df["age_head"] = persons_df["is_head"] * persons_df["age"]
-    persons_df["hispanic_head"] = persons_df["is_head"] * persons_df["hispanic"]
-    persons_df["child"] = np.where(persons_df["relate"].isin([2, 3, 4, 14]), 1, 0)
-    persons_df["senior"] = np.where(persons_df["age"] >= 65, 1, 0)
-    persons_df["age_gt55"] = np.where(persons_df["age"] >= 55, 1, 0)
-
-    households_new = persons_df.groupby("household_id").agg(income=("earning", "sum"),race_of_head=("race_head", "sum"),age_of_head=("age_head", "sum"), workers=("worker", "sum"),hispanic_status_of_head=("hispanic", "sum"),persons=("person", "sum"),children=("child", "sum"),seniors=("senior", "sum"),gt55=("age_gt55", "sum"),
-    )
-
-    households_new["hh_age_of_head"] = np.where(households_new["age_of_head"] < 35,"lt35",np.where(households_new["age_of_head"] < 65, "gt35-lt65", "gt65"),)
-    households_new["hispanic_head"] = np.where( households_new["hispanic_status_of_head"] == 1, "yes", "no")
-    households_new["hh_children"] = np.where( households_new["children"] >= 1, "yes", "no")
-    households_new["hh_seniors"] = np.where(households_new["seniors"] >= 1, "yes", "no")
-    households_new["gt2"] = np.where(households_new["persons"] >= 2, 1, 0)
-    households_new["gt55"] = np.where(households_new["gt55"] >= 1, 1, 0)
-    households_new["hh_income"] = np.where(households_new["income"] < 30000,"lt30",np.where(households_new["income"] < 60,
-            "gt30-lt60",
-            np.where(
-                households_new["income"] < 100,
-                "gt60-lt100",
-                np.where(households_new["income"] < 150, "gt100-lt150", "gt150"),
-            ),
-        ),
-    )
-    households_new["hh_workers"] = np.where(
-        households_new["workers"] == 0,
-        "none",
-        np.where(households_new["workers"] == 1, "one", "two or more"),
-    )
-
-    households_new["hh_race_of_head"] = np.where(
-        households_new["race_of_head"] == 1,
-        "white",
-        np.where(
-            households_new["race_of_head"] == 2,
-            "black",
-            np.where(households_new["race_of_head"].isin([6, 7]), "asian", "other"),
-        ),
-    )
-
-    households_new["hh_size"] = np.where(
-        households_new["persons"] == 1,
-        "one",
-        np.where(
-            households_new["persons"] == 2,
-            "two",
-            np.where(households_new["persons"] == 3, "three", "four or more"),
-        ),
-    )
-    households_df.update(households_new)
-
-    max_hh_id = metadata.loc["max_hh_id", "value"]
-    # Create household characteristics for new households formed
-    leaving_house["household_id"] = (
-        np.arange(len(breakup_hh))
-        + max(max_hh_id, households_df.index.max())
-        + 1
-    )
-    leaving_house["person"] = 1
-    leaving_house["is_head"] = np.where(leaving_house["relate"] == 0, 1, 0)
-    leaving_house["race_head"] = leaving_house["is_head"] * leaving_house["race_id"]
-    leaving_house["age_head"] = leaving_house["is_head"] * leaving_house["age"]
-    leaving_house["hispanic_head"] = (
-        leaving_house["is_head"] * leaving_house["hispanic"]
-    )
-    leaving_house["child"] = np.where(leaving_house["relate"].isin([2, 3, 4, 14]), 1, 0)
-    leaving_house["senior"] = np.where(leaving_house["age"] >= 65, 1, 0)
-    leaving_house["age_gt55"] = np.where(leaving_house["age"] >= 55, 1, 0)
-
-    households_new = leaving_house.groupby("household_id").agg(
-        income=("earning", "sum"),
-        race_of_head=("race_head", "sum"),
-        age_of_head=("age_head", "sum"),
-        workers=("worker", "sum"),
-        hispanic_status_of_head=("hispanic", "sum"),
-        persons=("person", "sum"),
-        children=("child", "sum"),
-        seniors=("senior", "sum"),
-        gt55=("age_gt55", "sum"),
-        lcm_county_id=("lcm_county_id", "first"),
-    )
-
-    households_new["hh_age_of_head"] = np.where(
-        households_new["age_of_head"] < 35,
-        "lt35",
-        np.where(households_new["age_of_head"] < 65, "gt35-lt65", "gt65"),
-    )
-    households_new["hispanic_head"] = np.where(
-        households_new["hispanic_status_of_head"] == 1, "yes", "no"
-    )
-    households_new["hh_children"] = np.where(
-        households_new["children"] >= 1, "yes", "no"
-    )
-    households_new["hh_seniors"] = np.where(households_new["seniors"] >= 1, "yes", "no")
-    households_new["gt2"] = np.where(households_new["persons"] >= 2, 1, 0)
-    households_new["gt55"] = np.where(households_new["gt55"] >= 1, 1, 0)
-    households_new["hh_income"] = np.where(
-        households_new["income"] < 30000,
-        "lt30",
-        np.where(
-            households_new["income"] < 60,
-            "gt30-lt60",
-            np.where(
-                households_new["income"] < 100,
-                "gt60-lt100",
-                np.where(households_new["income"] < 150, "gt100-lt150", "gt150"),
-            ),
-        ),
-    )
-    households_new["hh_workers"] = np.where(
-        households_new["workers"] == 0,
-        "none",
-        np.where(households_new["workers"] == 1, "one", "two or more"),
-    )
-
-    households_new["hh_race_of_head"] = np.where(
-        households_new["race_of_head"] == 1,
-        "white",
-        np.where(
-            households_new["race_of_head"] == 2,
-            "black",
-            np.where(households_new["race_of_head"].isin([6, 7]), "asian", "other"),
-        ),
-    )
-    households_new["hh_size"] = np.where(
-        households_new["persons"] == 1,
-        "one",
-        np.where(
-            households_new["persons"] == 2,
-            "two",
-            np.where(households_new["persons"] == 3, "three", "four or more"),
-        ),
-    )
-    households_new["cars"] = np.random.choice([0, 1], size=households_new.shape[0])
-    households_new["hh_cars"] = np.where(
-        households_new["cars"] == 0,
-        "none",
-        np.where(households_new["cars"] == 1, "one", "two or more"),
-    )
-    households_new["tenure"] = "unknown"
-    households_new["recent_mover"] = "unknown"
-    households_new["sf_detached"] = "unknown"
-    households_new["tenure_mover"] = "unknown"
-    households_new["block_id"] = "-1"
-    households_new["hh_type"] = "-1"
     households_df = pd.concat([households_df, households_new])
-
     persons_df = pd.concat([persons_df, leaving_house])
     
     return persons_df, households_df

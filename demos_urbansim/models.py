@@ -17,7 +17,6 @@ import yaml
 from google.cloud import storage
 from scipy.spatial.distance import cdist
 from urbansim.developer import developer
-from demos_urbansim.demos_utils.aging_utils import increment_ages
 from demos_urbansim.demos_utils.education_utils import (
     update_education_status,
     extract_students,
@@ -215,16 +214,17 @@ def aging_model(persons, households):
         None. Updates the age related columns in the households and persons tables.
     """
     persons_df = persons.local
-
+    households_df = households.local
     # Increment the age of the persons table
-    persons_df, households_ages = increment_ages(persons_df)
-
-    # Update age related columns in the households table
-    for column in ["age_of_head", "hh_age_of_head", "hh_children", "gt55", "hh_seniors"]:
-        orca.get_table("households").update_col(column, households_ages[column])
+    persons_df["age"] += 1
+    # Updating the tables
+    persons_df, households_df = aggregate_household_data(persons_df, households_df)
 
     # Update age in the persons table
     orca.get_table("persons").update_col("age", persons_df["age"])
+    # Update age related columns in the households table
+    for column in ["age_of_head", "hh_age_of_head", "hh_children", "gt55", "hh_seniors"]:
+        orca.get_table("households").update_col(column, households_df[column])
 
 @orca.step("income_model")
 def income_model(persons, households, year):
@@ -1154,9 +1154,9 @@ if orca.get_injectable("running_calibration_routine") == False:
         add_variables = ["add_temp_variables"]
         start_of_year_models = ["status_report"]
         demo_models = [
-            # "aging_model",
+            "aging_model",
             # "laborforce_model",
-            # "households_reorg",
+            "households_reorg",
             # "kids_moving_model",
             "fatality_model",
             "birth_model",
