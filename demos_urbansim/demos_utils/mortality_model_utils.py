@@ -45,8 +45,9 @@ def update_marital_status_for_widows(persons_df, dead_df):
 
 def restructure_headless_households(persons_df, dead_df):
     dead_heads = dead_df[dead_df["relate"] == 0]
+    persons_df["relate"] = persons_df["relate"].astype(int)
     headless_households = persons_df[persons_df["household_id"].isin(dead_heads["household_id"])]
-
+    
     if len(headless_households) > 0:
         headless_households = headless_households.sort_values("relate")
         headless_households = headless_households[["household_id", "relate", "age"]]
