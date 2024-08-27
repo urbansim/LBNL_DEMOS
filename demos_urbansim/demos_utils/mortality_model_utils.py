@@ -4,12 +4,24 @@ import pandas as pd
 from demos_urbansim.demos_utils.utils import aggregate_household_data
 
 def remove_deceased_houseolds(persons_df, households_df):
+    """
+    Remove deceased households from the persons and households tables.
+    
+    Args:
+        persons_df (pd.DataFrame): DataFrame of living persons
+        households_df (pd.DataFrame): DataFrame of households
+    
+    Returns:
+        pd.DataFrame: Updated persons DataFrame with deceased households removed
+        pd.DataFrame: Updated households DataFrame with deceased households removed
+    """
     household_mortality_stats_df = persons_df.groupby("household_id").agg(
         household_size=("dead", "size"),
         num_dead=("dead", "sum")
     )
-    
+    # Get households where everyone dies
     dead_households = household_mortality_stats_df.query("household_size == num_dead").index.unique()
+    # Get persons in those households
     grave_persons = persons_df[persons_df["household_id"].isin(dead_households)].copy()
     # Remove from persons table
     persons_df = persons_df[~persons_df["household_id"].isin(dead_households)]
@@ -36,23 +48,33 @@ def update_marital_status_for_widows(persons_df, dead_df):
         (persons_df["household_id"].isin(dead_spouse_households)) &
         (persons_df["relate"].isin([0, 1, 13]))
     ].index
-
     # Update marital status for widows
     persons_df.loc[widow_indices, "MAR"] = 3
     persons_df["MAR"] = persons_df["MAR"].astype(int)
-
     return persons_df
 
 def restructure_headless_households(persons_df, dead_df):
-    dead_heads = dead_df[dead_df["relate"] == 0]
-    persons_df["relate"] = persons_df["relate"].astype(int)
-    headless_households = persons_df[persons_df["household_id"].isin(dead_heads["household_id"])]
+    """
+    Restructure headless households where the head has died.
     
-    if len(headless_households) > 0:
-        headless_households = headless_households.sort_values("relate")
-        headless_households = headless_households[["household_id", "relate", "age"]]
-        headless_households = headless_households.groupby("household_id").apply(rez)
-        persons_df.loc[headless_households.index, "relate"] = headless_households["relate"]
+    Args:
+        persons_df (pd.DataFrame): DataFrame containing person-level data.
+        dead_df (pd.DataFrame): DataFrame containing deceased persons.
+    
+    Returns:
+        pd.DataFrame: Updated persons DataFrame with reorganized households.
+    """
+    # Get households where the head has died
+    dead_heads = dead_df[dead_df["relate"] == 0]
+    # Get persons in those households
+    persons_df["relate"] = persons_df["relate"].astype(int)
+    subset_persons_df = persons_df[persons_df["household_id"].isin(dead_heads["household_id"])]
+    
+    if len(subset_persons_df) > 0:
+        subset_persons_df = subset_persons_df.sort_values("relate")
+        subset_persons_df = subset_persons_df[["household_id", "relate", "age"]]
+        subset_persons_df = subset_persons_df.groupby("household_id").apply(rez)
+        persons_df.loc[subset_persons_df.index, "relate"] = subset_persons_df["relate"]
         persons_df["relate"] = persons_df["relate"].astype(int)
     
     persons_df["is_head"] = (persons_df["relate"] == 0).astype(int)
@@ -112,11 +134,13 @@ def remove_dead_persons(persons_df, households_df, fatality_list, year):
     # alive
     persons_df = persons_df[persons_df["dead"] == 0].copy()
 
+    # Update marital status for widows
     persons_df = update_marital_status_for_widows(persons_df, dead_df)
+    # Restructure headless households
     persons_df = restructure_headless_households(persons_df, dead_df)
-
+    # Aggregate household data
     persons_df, updated_households_df = aggregate_household_data(persons_df, households_df, initialize_new_households=False)
-
+    # Update households table
     households_df.update(updated_households_df)
     households_df = households_df.loc[persons_df["household_id"].unique()]
 
@@ -125,7 +149,8 @@ def remove_dead_persons(persons_df, households_df, fatality_list, year):
 
 def rez(group):
     """
-    Function to change the household head role
+    Function to map the household roles after
+    a household head has died.
     """
     # Update the relate variable for the group
     if group["relate"].iloc[0] == 1:
@@ -135,17 +160,14 @@ def rez(group):
         group["relate"].replace(13, 0, inplace=True)
         return group
 
-    # Get the maximum age of the household,
-    # oldest person becomes head of household
+    # oldest person becomes new head of household
     new_head_idx = group["age"].idxmax()
-    # Function to map the relation of new head
+    # Map new household roles
     map_func = produce_map_func(group.loc[new_head_idx, "relate"])
     group.loc[new_head_idx, "relate"] = 0
     group.relate = group.relate.map(map_func)
     return group
 
-# Function that takes the head's previous role and returns a function
-# that maps roles to new roles based on restructuring
 def produce_map_func(old_role):
     """
     Function that uses the relationship mapping in the

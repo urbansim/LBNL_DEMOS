@@ -25,18 +25,21 @@ from demos_urbansim.demos_utils.education_utils import (
     create_results_table
 )
 from demos_urbansim.demos_utils.household_reorg_utils import (
-    update_married_households_random,
     update_divorce,
     update_divorce_predictions,
-    update_marrital_status_stats,
     print_household_stats,
+    get_divorce_eligible_household_ids,
+)
+from demos_urbansim.demos_utils.single_to_x_utils import (
+    update_married_households,
     update_married_predictions,
     get_marriage_eligible_persons,
-    get_divorce_eligible_household_ids,
-    update_cohabitating_households,
+    update_marrital_status_stats,
+)
+from demos_urbansim.demos_utils.cohabitation_to_x_utils import (
+    process_cohabitation_to_marriage,
     get_cohabitation_to_x_eligible_households,
-    get_divorce_eligible_household_ids,
-    get_marriage_eligible_persons
+    update_cohabitating_households
 )
 from demos_urbansim.demos_utils.kids_move_utils import update_households_after_kids, update_kids_moving_table
 from demos_urbansim.demos_utils.simulation_utils import simulation_mnl, calibrate_model
@@ -431,9 +434,8 @@ def households_reorg(persons, households, year):
     persons_df, households_df = update_cohabitating_households(persons_df, households_df, cohabitate_to_x_preds, metadata)
     metadata = update_metadata(metadata, households_df, persons_df)
     print_household_stats(persons_df, households_df)
-    
     print("Marriages..")
-    update_married_households_random(persons_df, households_df, marriage_list, metadata)
+    update_married_households(persons_df, households_df, marriage_list, metadata)
     metadata = update_metadata(metadata, households_df, persons_df)
     married_table = orca.get_table("marriage_table").to_frame()
     married_table = update_married_predictions(married_table, marriage_list)
@@ -1154,7 +1156,7 @@ if orca.get_injectable("running_calibration_routine") == False:
         add_variables = ["add_temp_variables"]
         start_of_year_models = ["status_report"]
         demo_models = [
-            "aging_model",
+            # "aging_model",
             # "laborforce_model",
             "households_reorg",
             # "kids_moving_model",
