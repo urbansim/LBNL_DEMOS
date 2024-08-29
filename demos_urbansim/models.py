@@ -53,6 +53,7 @@ from demos_urbansim.demos_utils.birth_utils import (
     update_birth_eligibility_count_table,
 )
 from demos_urbansim.demos_utils.laborforce_utils import (
+    fetch_observed_labor_force_entries_exits,
     update_workforce_stats_tables,
     aggregate_household_labor_variables,
     sample_income,
