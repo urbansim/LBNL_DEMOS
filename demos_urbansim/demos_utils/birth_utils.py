@@ -2,7 +2,7 @@ import pandas as pd
 import orca
 import numpy as np
 
-def update_birth_eligibility_count_table(btable_elig_df, eligible_household_ids, year):
+def update_birth_eligibility_count_table(birth_eligible_hh_count_df, eligible_household_ids, year):
     """
     Update the birth eligibility count table with the number of eligible households.
 
@@ -11,7 +11,7 @@ def update_birth_eligibility_count_table(btable_elig_df, eligible_household_ids,
     initially empty, it creates a new DataFrame with the current count.
 
     Args:
-        btable_elig_df (pd.DataFrame): Existing DataFrame containing the history of 
+        birth_eligible_hh_count_df (pd.DataFrame): Existing DataFrame containing the history of 
                                        birth eligibility counts. Can be empty initially.
         eligible_household_ids (list): List of household IDs that are eligible for births.
         year (int): The current year for which the birth eligibility is being recorded.
@@ -19,16 +19,16 @@ def update_birth_eligibility_count_table(btable_elig_df, eligible_household_ids,
     Returns:
         pd.DataFrame: Updated birth eligibility count table with a new row for the current year.
     """
-    btable_elig_df_new = pd.DataFrame.from_dict({
+    birth_eligible_hh_count_df_new = pd.DataFrame.from_dict({
             "year": [str(year)],
             "count":  [len(eligible_household_ids)]
             })
-    if btable_elig_df.empty:
-        btable_elig_df = btable_elig_df_new
+    if birth_eligible_hh_count_df.empty:
+        birth_eligible_hh_count_df = birth_eligible_hh_count_df_new
     else:
-        btable_elig_df = pd.concat([btable_elig_df, btable_elig_df_new],
+        birth_eligible_hh_count_df = pd.concat([birth_eligible_hh_count_df, birth_eligible_hh_count_df_new],
          ignore_index=True)
-    return btable_elig_df
+    return birth_eligible_hh_count_df
 
 def update_births_predictions_table(births_table, year, birth_list):
     """
