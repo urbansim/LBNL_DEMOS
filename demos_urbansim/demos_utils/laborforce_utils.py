@@ -1,6 +1,38 @@
 import pandas as pd
 import numpy as np
 
+def fetch_observed_labor_force_entries_exits(persons_df,
+observed_stay_unemployed,
+observed_exit_workforce,
+year):
+    """
+    Fetch observed labor force entries and exits for a given year.
+
+    This function calculates the number of individuals entering and exiting the 
+    workforce based on observed data for a specific year. It uses the shares of 
+    individuals who remain unemployed and those who exit the workforce from the 
+    provided dataframes.
+
+    Args:
+        persons_df (pd.DataFrame): DataFrame containing person-level data, including 
+                                   employment status.
+        observed_stay_unemployed (pd.DataFrame): DataFrame containing observed data on 
+                                                individuals who remain unemployed.
+        observed_exit_workforce (pd.DataFrame): DataFrame containing observed data on 
+                                                individuals who exit the workforce.
+        year (int): The current year for which the statistics are being updated.
+
+    Returns:
+        tuple: A tuple containing the number of individuals exiting the workforce 
+               and the number of individuals entering the workforce.
+    """
+    num_unemployed = persons_df[(persons_df["worker"]==0) & (persons_df["age"]>=18)].shape[0]
+    entering_workforce_share = observed_stay_unemployed[observed_stay_unemployed["year"]==year]["share"]
+    entering_workforce_count = round(entering_workforce_share * num_unemployed)
+    exiting_workforce_share = observed_exit_workforce[observed_exit_workforce["year"]==year]["share"]
+    exiting_workforce_count = (exiting_workforce_share * num_unemployed)
+    return exiting_workforce_count, entering_workforce_count
+
 def update_workforce_stats_tables(workforce_df, persons_df, year):
     """
     Update workforce statistics tables with current year data.
