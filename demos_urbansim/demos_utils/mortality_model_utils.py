@@ -15,6 +15,7 @@ def remove_deceased_houseolds(persons_df, households_df):
         pd.DataFrame: Updated persons DataFrame with deceased households removed
         pd.DataFrame: Updated households DataFrame with deceased households removed
     """
+    # Get household mortality stats
     household_mortality_stats_df = persons_df.groupby("household_id").agg(
         household_size=("dead", "size"),
         num_dead=("dead", "sum")
@@ -69,22 +70,22 @@ def restructure_headless_households(persons_df, dead_df):
     # Get persons in those households
     persons_df["relate"] = persons_df["relate"].astype(int)
     subset_persons_df = persons_df[persons_df["household_id"].isin(dead_heads["household_id"])]
-    
+    # Restructure households
     if len(subset_persons_df) > 0:
         subset_persons_df = subset_persons_df.sort_values("relate")
         subset_persons_df = subset_persons_df[["household_id", "relate", "age"]]
         subset_persons_df = subset_persons_df.groupby("household_id").apply(rez)
         persons_df.loc[subset_persons_df.index, "relate"] = subset_persons_df["relate"]
         persons_df["relate"] = persons_df["relate"].astype(int)
-    
+    # generate head and partner flags
     persons_df["is_head"] = (persons_df["relate"] == 0).astype(int)
     persons_df["is_partner"] = (persons_df["relate"] == 1).astype(int)
-
+    # debugging step, counting number of heads and partners
     household_counts = persons_df.groupby("household_id").agg({
         "is_head": "sum",
         "is_partner": "sum"
     })
-    
+    # keep only valid households
     valid_households = household_counts[
         (household_counts["is_head"] <= 1) & 
         (household_counts["is_partner"] <= 1)
@@ -109,7 +110,9 @@ def remove_dead_persons(persons_df, households_df, fatality_list, year):
         households (DataFramWrapper): DataFramWrapper of households table
         fatality_list (pd.Series): Pandas Series of fatality list
     """
+    # initialize dead column
     persons_df["dead"] = -99
+    # update dead column with fatality list
     persons_df["dead"] = fatality_list
     graveyard = persons_df[persons_df["dead"] == 1].copy()
 
@@ -149,8 +152,16 @@ def remove_dead_persons(persons_df, households_df, fatality_list, year):
 
 def rez(group):
     """
-    Function to map the household roles after
-    a household head has died.
+    Function to reassign household roles after the death of a household head.
+    
+    This function takes a group of household members and updates their 'relate' 
+    values (which represent their roles within the household) when the original 
+    household head has died. It handles different scenarios:
+    
+    1. If there's a spouse (relate=1), they become the new head.
+    2. If there's an unmarried partner (relate=13), they become the new head.
+    3. Otherwise, the oldest person becomes the new head, 
+       and other roles are adjusted accordingly.
     """
     # Update the relate variable for the group
     if group["relate"].iloc[0] == 1:
