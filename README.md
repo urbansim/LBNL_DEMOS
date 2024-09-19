@@ -1,8 +1,9 @@
 # DEMOS: Demographic Microsimulator
 
 
-This repository contains code that runs simulations for the DEMOS model suite, as fully integrated with Urbansim models. The current DEMOS model suite is implemented for the San Francisco Bay Area and the Austin Area. Several demographic models are implemented along with  Urbansim models. The details about the implemented DEMOS model is provided below: 
+This repository contains code that runs simulations for the DEMOS model suite, as fully integrated with Urbansim models. The current DEMOS model suite is implemented for the San Francisco Bay Area and the Austin Area. Several demographic models are implemented along with  Urbansim models. Please refer to the following technical memorandum for more details on the implemented DEMOS models: [DEMOS Technical Memo](https://app.box.com/s/wcyo5jqcm4xzljtpyx72crml4uad8gey)
 
+Current models implemented within DEMOS: 
 
 - Aging Model: Increment the age of each agent in the simulation year 
 - Birth Model: Predicts new births in households in each year
