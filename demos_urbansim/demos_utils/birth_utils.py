@@ -6,10 +6,6 @@ def update_birth_eligibility_count_table(birth_eligible_hh_count_df, eligible_ho
     """
     Update the birth eligibility count table with the number of eligible households.
 
-    This function adds a new entry to the birth eligibility count table, recording
-    the number of households eligible for births in the given year. If the table is
-    initially empty, it creates a new DataFrame with the current count.
-
     Args:
         birth_eligible_hh_count_df (pd.DataFrame): Existing DataFrame containing the history of 
                                        birth eligibility counts. Can be empty initially.
@@ -33,10 +29,6 @@ def update_birth_eligibility_count_table(birth_eligible_hh_count_df, eligible_ho
 def update_births_predictions_table(births_table, year, birth_list):
     """
     Update the births predictions table with the number of predicted births for the current year.
-
-    This function adds a new entry to the births predictions table, recording the number of 
-    predicted births in the given year. If the table is initially empty, it creates a new 
-    DataFrame with the current count.
 
     Args:
         births_table (pd.DataFrame): Existing DataFrame containing the history of predicted 
@@ -62,10 +54,6 @@ def get_birth_eligible_households(persons_df, households_df):
     """
     Identify households eligible for births based on person-level data.
 
-    This function determines which households are eligible for births by identifying
-    individuals within a specified age range and gender. It returns a list of unique
-    household IDs that meet the eligibility criteria.
-
     Args:
         persons_df (pd.DataFrame): DataFrame containing person-level data, including 
                                    age, gender, and household IDs.
@@ -75,6 +63,7 @@ def get_birth_eligible_households(persons_df, households_df):
     Returns:
         list: A list of household IDs that are eligible for the birth model.
     """
+    # Specifying the eligibility condition for births
     ELIGIBILITY_COND = (
         (persons_df["sex"] == 2)
         & (persons_df["age"].between(14, 45))
@@ -86,6 +75,18 @@ def get_birth_eligible_households(persons_df, households_df):
     return eligible_household_ids
 
 def get_highest_person_index(persons_df, metadata):
+    """
+    Get the highest person index in the persons table.
+
+    Args:
+        persons_df (pd.DataFrame): DataFrame containing person-level data, including 
+                                   person IDs.
+        metadata (pd.DataFrame): DataFrame containing metadata, including the maximum 
+                                 person ID.
+
+    Returns:
+        int: The highest person index in the persons table.
+    """
     highest_index = persons_df.index.max()
     max_p_id = metadata.loc["max_p_id", "value"]
     highest_index = max(max_p_id, highest_index)
@@ -98,45 +99,96 @@ def get_highest_person_index(persons_df, metadata):
     
     return highest_index
 def get_birth_households(birth_list):
+    """
+    Get the household IDs of households with predicted births.
+
+    Args:
+        birth_list (pd.Series): Series indicating the households with predicted births.
+
+    Returns:
+        list: A list of household IDs that are predicted to have a birth.
+    """
     return list(birth_list[birth_list == 1].index)
 
 def create_newborns_dataframe(house_indices, highest_index):
+    """
+    Create a new dataframe for newborns.
+
+    Args:
+        house_indices (list): List of household IDs with predicted births.
+        highest_index (int): The highest person index in the persons table.
+
+    Returns:
+        pd.DataFrame: A new dataframe for newborns with initialized attributes.
+    """
+    # initialize the newborns dataframe
     newborns = pd.DataFrame(house_indices, columns=["household_id"])
+    # assign unique person IDs
     newborns.index += highest_index + 1
     newborns.index.name = "person_id"
     return newborns
 
 def assign_basic_attributes(newborns):
-        newborns["age"] = 0
-        newborns["edu"] = 0
-        newborns["earning"] = 0
-        newborns["hours"] = 0
-        newborns["relate"] = 2
-        newborns["MAR"] = 5
-        newborns["sex"] = np.random.choice([1, 2])
-        newborns["student"] = 0
-        newborns["person_age"] = "19 and under"
-        newborns["person_sex"] = newborns["sex"].map({1: "male", 2: "female"})
-        newborns["child"] = 1
-        newborns["senior"] = 0
-        newborns["dead"] = -99
-        newborns["person"] = 1
-        newborns["work_at_home"] = 0
-        newborns["worker"] = 0
-        newborns["work_block_id"] = "-1"
-        newborns["work_zone_id"] = "-1"
-        newborns["workplace_taz"] = "-1"
-        newborns["school_block_id"] = "-1"
-        newborns["school_id"] = "-1"
-        newborns["school_taz"] = "-1"
-        newborns["school_zone_id"] = "-1"
-        newborns["education_group"] = "lte17"
-        newborns["age_group"] = "lte20"
-        return newborns
+    """
+    Assign basic attributes to newborns.
+
+    Args:
+        newborns (pd.DataFrame): DataFrame containing newborns with initialized attributes.     
+
+    Returns:
+        pd.DataFrame: DataFrame containing newborns with assigned attributes.
+    """
+    newborns["age"] = 0 # age
+    newborns["edu"] = 0 # education
+    newborns["earning"] = 0 # earnings
+    newborns["hours"] = 0 # hours worked
+    newborns["relate"] = 2 # relationship status
+    newborns["MAR"] = 5 # marital status
+    newborns["sex"] = np.random.choice([1, 2]) # sex
+    newborns["student"] = 0 # student status
+    newborns["education_group"] = "lte17" # education group
+    newborns["age_group"] = "lte20" # age group
+    newborns["person_age"] = "19 and under" # person age
+    newborns["person_sex"] = newborns["sex"].map({1: "male", 2: "female"}) # person sex
+    newborns["child"] = 1 # child status
+    newborns["senior"] = 0 # senior status
+    newborns["dead"] = -99 # dead status
+    newborns["person"] = 1 # person status
+    newborns["work_at_home"] = 0 # work at home status
+    newborns["worker"] = 0 # worker status
+    newborns["work_block_id"] = "-1" # work block id
+    newborns["work_zone_id"] = "-1" # work zone id
+    newborns["workplace_taz"] = "-1" # workplace taz
+    newborns["school_block_id"] = "-1" # school block id
+    newborns["school_id"] = "-1" # school id
+    newborns["school_taz"] = "-1" # school taz
+    newborns["school_zone_id"] = "-1" # school zone id
+
+    return newborns
 
 
 def assign_race_attributes(newborns, persons_df, households_df):
-    household_races = get_household_races(persons_df, households_df)
+    """
+    Assign race attributes to newborns.
+
+    This function assigns race attributes to newborns based on the race of the household head.
+
+    Args:
+        newborns (pd.DataFrame): DataFrame containing newborns with initialized attributes.
+        persons_df (pd.DataFrame): DataFrame containing person-level data, including 
+                                   household IDs and demographic attributes.
+        households_df (pd.DataFrame): DataFrame containing household-level data, 
+                                      indexed by household IDs.
+
+    Returns:
+        pd.DataFrame: DataFrame containing newborns with assigned race attributes.
+    """
+    # Get the number of races in each household
+    household_races = persons_df.groupby("household_id")
+            .agg(num_races=("race_id", "nunique"))
+            .reset_index()
+            .merge(households_df["race_of_head"].reset_index(), on="household_id")
+    # Assign race attributes to newborns
     newborns = newborns.reset_index().merge(household_races, on="household_id")
     newborns["race_id"] = np.where(newborns["num_races"] == 1, newborns["race_of_head"], 9)
     newborns["race"] = newborns["race_id"].map({
@@ -145,19 +197,37 @@ def assign_race_attributes(newborns, persons_df, households_df):
     })
     return newborns
 
-def get_household_races(persons_df, households_df):
-    return (persons_df.groupby("household_id")
-            .agg(num_races=("race_id", "nunique"))
-            .reset_index()
-            .merge(households_df["race_of_head"].reset_index(), on="household_id"))
 
 def assign_hispanic_attributes(newborns, persons_df):
+    """
+    Assign Hispanic attributes to newborns based on the Hispanic status 
+    of the household head.
+
+    Args:
+        newborns (pd.DataFrame): DataFrame containing newborns with initialized attributes.
+        persons_df (pd.DataFrame): DataFrame containing person-level data
+
+    Returns:
+        pd.DataFrame: DataFrame containing newborns with assigned Hispanic attributes.
+    """
+    # Get the Hispanic status of the household head
     heads = persons_df[persons_df["relate"] == 0]
     heads = heads[["hispanic", "hispanic.1", "p_hispanic", "household_id"]]
     newborns = newborns.reset_index()
+    # Assign Hispanic attributes to newborns
     return newborns.merge(heads, on="household_id").set_index("person_id")
 
 def assign_member_ids(newborns, persons_df):
+    """
+    Assign member IDs to newborns.
+
+    Args:
+        newborns (pd.DataFrame): DataFrame of newborns.
+        persons_df (pd.DataFrame): DataFrame containing person-level data.
+
+    Returns:
+        pd.DataFrame: DataFrame of newborns with assigned member IDs.
+    """
     grave = orca.get_table("pop_over_time").to_frame()
     all_people = pd.concat([grave, persons_df[["member_id", "household_id"]]]) if not grave.empty else persons_df[["member_id", "household_id"]]
     max_member_id = all_people.groupby("household_id").agg({"member_id": "max"}) + 1
@@ -166,7 +236,19 @@ def assign_member_ids(newborns, persons_df):
             .set_index("person_id"))
 
 def update_households(households_df, house_indices):
+    """
+    Update the household characteristics to reflect new births.
+
+    Args:
+        households_df (pd.DataFrame): DataFrame containing household-level data.
+        house_indices (list): List of household IDs with predicted births.
+
+    Returns:
+        pd.DataFrame: household-level data with updated characteristics.
+    """
+    # index the households with births
     households_babies = households_df.loc[house_indices]
+    # update the household characteristics
     households_babies["hh_children"] = "yes"
     households_babies["persons"] += 1
     households_babies["gt2"] = np.where(households_babies["persons"] >= 2, 1, 0)
@@ -175,6 +257,7 @@ def update_households(households_df, house_indices):
         np.where(households_babies["persons"] == 2, "two",
                  np.where(households_babies["persons"] == 3, "three", "four or more"))
     )
+    # update the households table
     households_df.update(households_babies[households_df.columns])
     return households_df
             
