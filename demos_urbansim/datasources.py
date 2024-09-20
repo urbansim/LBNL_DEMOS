@@ -492,11 +492,42 @@ orca.add_table("ect", ect.set_index("year"))
 # -----------------------------------------------------------------------------------------
 # ADD ACTIVITYSIM SKIMS DATA
 # -----------------------------------------------------------------------------------------
-skims = omx.open_file("data/skims_mpo_{}.omx".format(region_code), "r")
-orca.add_injectable("asim_skims", skims)
+
+def load_activitysim_skims(region_code):
+    """
+    Loads ActivitySim skims data from a specified file.
+
+    Parameters:
+    region_code (str): The region code for the skims data.
+
+    Returns:
+    bool: True if the skims data was successfully loaded, False otherwise.
+    """
+    skims_file = f"data/skims_mpo_{region_code}.omx"
+    if os.path.exists(skims_file):
+        try:
+            skims = omx.open_file(skims_file, "r")
+            orca.add_injectable("asim_skims", skims)
+            print(f"Successfully loaded skims data from {skims_file}")
+            return True
+        except Exception as e:
+            print(f"Failed to load skims data: {str(e)}")
+    else:
+        print(f"Skims file not found: {skims_file}")
+    return False
+
+# Load ActivitySim skims data
+skims_loaded = load_activitysim_skims(region_code)
+orca.add_injectable("skims_loaded", skims_loaded)
+
+if not skims_loaded:
+    print("ActivitySim skims data not loaded.")
+    print("Accessibility measures based on travel times will not be calculated.")
+    print("HLCM and WLCM models will not support logsum variables.")
+    print("Please ensure to use appropriate model specifications for HLCM and WLCM")
+    print("that do not include logsum variables based on ActivitySim skims.")
 
 # Mode Choice Constants (Consider moving them to .yaml file)
-# Here as a place holder for now
 orca.add_injectable("cost_per_mile", 18.0)  # 18 cents per miles
 orca.add_injectable("walkThresh", 2.0)  # 2 miles
 orca.add_injectable("walkSpeed", 3.0)  # 3 miles per hour
