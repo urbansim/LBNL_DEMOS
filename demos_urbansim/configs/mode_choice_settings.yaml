@@ -1,0 +1,26 @@
+# Mode Choice Settings
+# This file contains parameters used in the mode choice model 
+# and for the computation of accessibility measures
+
+cost_per_mile: 18.0
+walkThresh: 2.0
+walkSpeed: 3.0
+bikeThresh: 6.0
+bikeSpeed: 12.00
+ivt_cost_multiplier: 0.6
+costShareSr2: 1.75
+costShareSr3: 2.50
+short_i_wait_multiplier: 2.0
+waitThresh: 10.00
+long_i_wait_multiplier: 1.0
+xwait_multiplier: 2.0
+wacc_multiplier: 2.0
+wegr_multiplier: 2.0
+shortWalk: 0.333
+longWalk: 0.667
+tnc_baseline: 2.20
+tnc_cost_minute: 0.24
+tnc_cost_mile: 1.33
+tnc_min_fare: 7.20
+avg_parking_cost: 2.50
+transit_change: 1
