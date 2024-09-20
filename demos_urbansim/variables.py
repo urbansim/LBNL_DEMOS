@@ -6,6 +6,7 @@ import numpy as np
 import orca
 import pandas as pd
 import yaml
+import functools
 from urbansim.utils import misc
 
 print('importing variables for region', orca.get_injectable('region_code'))
