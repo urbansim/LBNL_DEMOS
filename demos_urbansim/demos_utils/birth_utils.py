@@ -184,10 +184,8 @@ def assign_race_attributes(newborns, persons_df, households_df):
         pd.DataFrame: DataFrame containing newborns with assigned race attributes.
     """
     # Get the number of races in each household
-    household_races = persons_df.groupby("household_id")
-            .agg(num_races=("race_id", "nunique"))
-            .reset_index()
-            .merge(households_df["race_of_head"].reset_index(), on="household_id")
+    
+    household_races = get_household_races(persons_df, households_df)
     # Assign race attributes to newborns
     newborns = newborns.reset_index().merge(household_races, on="household_id")
     newborns["race_id"] = np.where(newborns["num_races"] == 1, newborns["race_of_head"], 9)
@@ -197,6 +195,11 @@ def assign_race_attributes(newborns, persons_df, households_df):
     })
     return newborns
 
+def get_household_races(persons_df, households_df):
+    return (persons_df.groupby("household_id")
+            .agg(num_races=("race_id", "nunique"))
+            .reset_index()
+            .merge(households_df["race_of_head"].reset_index(), on="household_id"))
 
 def assign_hispanic_attributes(newborns, persons_df):
     """
