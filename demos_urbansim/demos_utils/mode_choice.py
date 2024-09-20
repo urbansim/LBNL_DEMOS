@@ -6,15 +6,24 @@ import numpy as np
 #################################
 
 def flatten_dict_values(dictionary):
+    """
+    Flattens the values of a dictionary into a single array.
+    """
     return {k: np.array(list(v.values())) for k, v in dictionary.items()}
 
 
 def dict_to_array(d):
+    """
+    Converts a dictionary of values to a numpy array.
+    """
     x = [values for _, values in d.items()]
     return np.array(x)
 
 
 def map_dict_values(dict_1, dict_2):
+    """
+    Maps the values of one dictionary to another dictionary.
+    """
     new_dict = copy.deepcopy(dict_2)
 
     for key, value in dict_2.items():
@@ -28,17 +37,21 @@ def map_dict_values(dict_1, dict_2):
 
 def softmax(x, scale=1):
     """
-    Probability estimation for j alternatives and n observations.
+    Estimate probabilities for j alternatives and n observations.
 
-    Parameters:
-    ------------
-    - x: array-like. Utility input array in the shape (j, n)
-    - scale: int, optional - scaling factor for exp(scale * x). default = 1
-    j is the number of alternatives, n is the number of observations.
-    Returns:
-    --------
-    An array with the same shape of x.
-    The result will sum to 1 along the 0 axis.
+    Parameters
+    ----------
+    x : array-like
+        Utility input array in the shape (j, n), where j is the number of
+        alternatives and n is the number of observations.
+    scale : int, optional
+        Scaling factor for exp(scale * x). Default is 1.
+
+    Returns
+    -------
+    ndarray
+        An array with the same shape as x.
+        The result will sum to 1 along the 0 axis.
     """
     exp_utility = np.exp(scale * x)
     sum_exp_utility = np.sum(exp_utility, axis = 0, keepdims=True)
