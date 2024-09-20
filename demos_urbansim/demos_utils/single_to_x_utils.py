@@ -111,7 +111,7 @@ def process_couples(couples, start_household_id):
     new_household_mask = couples["stay"] == 3
     new_household_count = new_household_mask.sum()
     new_household_ids = np.arange(start_household_id, start_household_id + new_household_count)
-    breakpoint()
+    # breakpoint()
     # Create a Series to map pair numbers to new household IDs
     pair_to_household = pd.Series(new_household_ids, index=couples[new_household_mask]["pair_number"].unique())
 
@@ -164,7 +164,7 @@ def reorganize_households(persons_df, household_ids):
         subset_persons_df = persons_df[persons_df["household_id"].isin(household_ids)].reset_index()
         # Sort by household_id and earning, then assign new head of household
         subset_persons_df = subset_persons_df.sort_values(by=["household_id", "earning"], ascending=[True, False])
-        breakpoint()
+        # breakpoint()
         person_ids = subset_persons_df.groupby("household_id").first()["person_id"].values
         subset_persons_df = subset_persons_df.set_index("person_id")
         subset_persons_df.loc[person_ids, "relate"] = 0

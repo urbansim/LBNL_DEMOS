@@ -108,6 +108,7 @@ def aggregate_household_data(persons_df, households_df, initialize_new_household
     Returns:
         tuple: Updated `persons_df` and a DataFrame of aggregated household data.
     """
+    # initialize person level variables
     persons_df["person"] = 1
     persons_df["is_head"] = np.where(persons_df["relate"] == 0, 1, 0)
     persons_df["race_head"] = persons_df["is_head"] * persons_df["race_id"]
@@ -118,7 +119,7 @@ def aggregate_household_data(persons_df, households_df, initialize_new_household
     persons_df["age_gt55"] = np.where(persons_df["age"] >= 55, 1, 0)
         
     persons_df = persons_df.sort_values("relate")
-
+    # set up aggregation dictionary
     agg_dict = {
         "income": ("earning", "sum"),
         "race_of_head": ("race_head", "sum"),
@@ -132,13 +133,13 @@ def aggregate_household_data(persons_df, households_df, initialize_new_household
         "children": ("child", "sum"),
     }
     agg_dict = {k: v for k, v in agg_dict.items() if v[0] in persons_df.columns}
-
+    # initialize car ownership for new households
     if initialize_new_households:
         persons_df["cars"] = np.random.choice([0, 1, 2], size=len(persons_df))
         agg_dict["cars"] = ("cars", "sum")
-
+    # aggregate person-level data to household-level
     agg_households = persons_df.groupby("household_id").agg(**agg_dict)
-
+    # initialize additional household attributes
     agg_households["hh_age_of_head"] = np.where(
         agg_households["age_of_head"] < 35,
         "lt35",
@@ -189,7 +190,7 @@ def aggregate_household_data(persons_df, households_df, initialize_new_household
     agg_households["hh_seniors"] = np.where(agg_households["seniors"] >= 1, "yes", "no")
     agg_households["gt55"] = np.where(agg_households["age_gt55"] > 0, 1, 0)
     agg_households["gt2"] = np.where(agg_households["persons"] > 2, 1, 0)
-
+    # initialize new households with attributes
     #TODO: WHICH ONES SHOULD BE INITIALIZED BY -1?
     if initialize_new_households:
         agg_households["hh_cars"] = np.where(
@@ -232,8 +233,10 @@ def deduplicate_multihead_households(persons_df, households_df):
     Returns:
         tuple: Updated `persons_df` and `households_df` with erroneous households removed.
     """
+    # identify households with only non-head members
     households_to_drop = persons_df[persons_df['relate'].isin([1, 13])].groupby('household_id')['relate'].nunique().reset_index()
     households_to_drop = households_to_drop[households_to_drop["relate"]==2]["household_id"].to_list()
+    # deduplicate persons and households
     households_df = households_df.drop(households_to_drop)
     persons_df = persons_df[~persons_df["household_id"].isin(households_to_drop)]
 
