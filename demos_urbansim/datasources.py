@@ -530,30 +530,6 @@ if not asim_skims_loaded:
     print("Please ensure to use appropriate model specifications for HLCM and WLCM")
     print("that do not include logsum variables based on ActivitySim skims.")
 
-# # Mode Choice Constants (Consider moving them to .yaml file)
-# orca.add_injectable("cost_per_mile", 18.0)  # 18 cents per miles
-# orca.add_injectable("walkThresh", 2.0)  # 2 miles
-# orca.add_injectable("walkSpeed", 3.0)  # 3 miles per hour
-# orca.add_injectable("bikeThresh", 6.0)  # 2 miles
-# orca.add_injectable("bikeSpeed", 12.00)  # 3 miles per hour
-# orca.add_injectable("ivt_cost_multiplier", 0.6)
-# orca.add_injectable("costShareSr2", 1.75)
-# orca.add_injectable("costShareSr3", 2.50)
-# orca.add_injectable("short_i_wait_multiplier", 2.0)
-# orca.add_injectable("waitThresh", 10.00)
-# orca.add_injectable("long_i_wait_multiplier", 1.0)
-# orca.add_injectable("xwait_multiplier", 2.0)
-# orca.add_injectable("wacc_multiplier", 2.0)
-# orca.add_injectable("wegr_multiplier", 2.0)
-# orca.add_injectable("shortWalk", 0.333)
-# orca.add_injectable("longWalk", 0.667)
-# orca.add_injectable("tnc_baseline", 2.20)
-# orca.add_injectable("tnc_cost_minute", 0.24)
-# orca.add_injectable("tnc_cost_mile", 1.33)
-# orca.add_injectable("tnc_min_fare", 7.20)
-# orca.add_injectable("avg_parking_cost", 2.50)
-# orca.add_injectable("transit_change", 1)
-
 def load_mode_choice_constants():
     mode_choice_settings_path = 'configs/mode_choice_settings.yaml'
     if not os.path.exists(mode_choice_settings_path):
