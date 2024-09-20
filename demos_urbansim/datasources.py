@@ -508,19 +508,22 @@ def load_activitysim_skims(region_code):
         try:
             skims = omx.open_file(skims_file, "r")
             orca.add_injectable("asim_skims", skims)
+            orca.add_injectable("asim_skims_loaded", True)
             print(f"Successfully loaded skims data from {skims_file}")
             return True
         except Exception as e:
+            orca.add_injectable("asim_skims_loaded", False)
             print(f"Failed to load skims data: {str(e)}")
     else:
         print(f"Skims file not found: {skims_file}")
+        orca.add_injectable("asim_skims", False)
+        orca.add_injectable("asim_skims_loaded", False)
     return False
 
 # Load ActivitySim skims data
-skims_loaded = load_activitysim_skims(region_code)
-orca.add_injectable("skims_loaded", skims_loaded)
+asim_skims_loaded = load_activitysim_skims(region_code)
 
-if not skims_loaded:
+if not asim_skims_loaded:
     print("ActivitySim skims data not loaded.")
     print("Accessibility measures based on travel times will not be calculated.")
     print("HLCM and WLCM models will not support logsum variables.")
