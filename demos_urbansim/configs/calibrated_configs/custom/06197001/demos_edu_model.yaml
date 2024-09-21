@@ -14,7 +14,7 @@ saved_object:
   - -1.2320000000000002
   model_expression: stop ~ agebin2 + agebin3 + agebin4 + employbin1 + employbin2 +
     marital1 + marital4 + 1
-  name: education
+  name: education_model
   out_column: stop
   out_filters:
   - age > 15

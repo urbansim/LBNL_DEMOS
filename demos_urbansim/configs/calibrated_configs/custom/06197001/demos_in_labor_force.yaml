@@ -12,7 +12,7 @@ saved_object:
     - -0.4146881
     - -0.7963939
   model_expression: stay_out ~ agebin1_labor + agebin2_labor + agebin3_labor + agebin4_labor + agebin5_labor + gender2 + edubin2 + edubin3 + 1
-  name: enter_labor_force
+  name: enter_labor_force_model
   out_column: null
   out_filters:
     - (worker == 0) & (age >= 18)

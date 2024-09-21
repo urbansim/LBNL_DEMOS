@@ -1,3 +1,4 @@
+# Custom settings for the skims data, helping to define the skims variables and impedence levels
 "06197001":
   skims:
     beam: {columns: ['SOV_AM_IVT_mins'],
