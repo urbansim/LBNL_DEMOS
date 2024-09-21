@@ -12,7 +12,6 @@ import numpy as np
 import orca
 import pandana as pdna
 import pandas as pd
-import stopwatch
 import yaml
 from google.cloud import storage
 from scipy.spatial.distance import cdist
@@ -553,8 +552,8 @@ def laborforce_model(persons, households, year):
     )
     # Adding updated tables
     orca.add_table("workforce_stats", workforce_stats_df)
-    orca.add_table("persons", persons_df[persons_cols])
-    orca.add_table("households", households_df[households_cols])
+    orca.add_table("persons", persons_df[persons_local_cols])
+    orca.add_table("households", households_df[households_local_cols])
 
 
 # --------------------------------------------------------------------
