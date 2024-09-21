@@ -1,9 +1,9 @@
-pandas
+pandas<=1.5.3
 geopandas
 urbansim
 orca>=1.3.0
 toolz==0.10
-numpy>=1.1.0
+numpy<=1.19.5
 pandana>=0.5.1
 streamlit
 pyyaml
@@ -15,6 +15,7 @@ datashader
 google-cloud-storage
 plotly
 stopwatch.py
+openmatrix
 
 git+https://git@github.com/UDST/choicemodels.git@lotto_choice_empty_alts
-git+https://git@github.com/UDST/urbansim_templates.git@dev
+git+https://git@github.com/UDST/urbansim_templates.git@intx_term_update
