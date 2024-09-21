@@ -2177,8 +2177,10 @@ def to_zone_id(job_flows, blocks):
 
 @orca.injectable()
 def mode_choice_template(region_code, calibrated_folder):
-    # region_code = orca.get_injectable("region_code")
-    # calibrated_folder = orca.get_injectable("calibrated_folder")
+    """
+    Loads the mode choice template from the calibrated config folder.
+    """
+
     calibrated_path = os.path.join(
         'configs',
         'calibrated_configs/',
@@ -2186,12 +2188,18 @@ def mode_choice_template(region_code, calibrated_folder):
         region_code,
         'mode_choice',
         'mode_choice_logsum.yaml')
-    # output_file = f"configs/mode_choice/mode_choice_logsum.yaml"
     return read_yaml_file(calibrated_path)
 
 @orca.column('travel_data', cache = 'iteration')
 def logsum(mode_choice_template, travel_data):
-
+    """
+    Function to calculate the logsums based on the mode choice template.
+    Args:
+        mode_choice_template (dict): The mode choice template.
+        travel_data (pd.DataFrame): The travel data.
+    Returns:
+        pd.Series: Series of logsums, indexed by geometry in travel_data.
+    """
     # Read Mode Choice Specs
     coeffs = mode_choice_template['saved_object']['fitted_parameters']
     specs = OrderedDict(mode_choice_template['saved_object']['model_expression'])

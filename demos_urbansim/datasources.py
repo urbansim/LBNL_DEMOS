@@ -667,8 +667,8 @@ configs_folder = (
     else "estimated_configs"
 )
 
-marriage_model = read_yaml(configs_folder + "/marriage.yml")
-cohabitation_model = read_yaml(configs_folder + "/cohabitation.yaml")
+marriage_model = read_yaml(configs_folder + "/demos_single_to_x.yaml")
+cohabitation_model = read_yaml(configs_folder + "/demos_cohabitation_to_x.yaml")
 
-orca.add_injectable("marriage_model", marriage_model)
-orca.add_injectable("cohabitation_model", cohabitation_model)
+orca.add_injectable("single_to_x_model", marriage_model)
+orca.add_injectable("cohabitation_to_x_model", cohabitation_model)
