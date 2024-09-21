@@ -69,7 +69,27 @@ The `indicators.py` file is responsible for processing simulation data, creating
 The `simulate.py` file is the main entry point for running simulations. It handles command-line arguments, initializes the simulation environment, and executes the simulation steps. [Section II](#ii-setup-guide) describes how to set up the development environment and run the simulation.
 
 
+## data folder
+The data folder should contain the following files:
+- `custom_mpo_{region_code}_model_data.h5`: This file contains the model data for the region. It is a HDF5 file that contains the following tables:
+  - `households`: This table contains the household data.
+  - `persons`: This table contains the person data.
+  - `blocks`: This table contains the block data.
+  - `jobs`: This table contains the job data.
+  - `schools`: This table contains the school data.
 
+- `income_growth_rates_{region_code}.csv`: This file contains the income growth rates for the region.
+- `births_over_time_obs_{region_code}.csv`: This file contains the observed births over time for the region.
+- `mortalities_over_time_obs_{region_code}.csv`: This file contains the observed mortalities over time for the region.
+- `hsizec_ct_{region_code}.csv`: This file contains the observed household size distribution for the region.
+- `rel_map.csv`: This file contains the relationship mapping structure after mortality model
+- `divorces_over_time_obs_{region_code}.csv`: This file contains the observed divorces over time for the region.
+- `enrollment_over_time_obs_{region_code}.csv`: This file contains the observed enrollment over time for the region.
+- `gender_over_time_obs_{region_code}.csv`: This file contains the observed gender distribution over time for the region.
+- `marrital_status_over_time_obs_{region_code}.csv`: This file contains the observed marital status distribution over time for the region.
+- `pop_over_time_obs_{region_code}.csv`: This file contains the observed population distribution over time for the region.
+- `households_over_time_obs_{region_code}.csv`: This file contains the observed household distribution over time for the region.
+- `marriages_over_time_obs_{region_code}.csv`: This file contains the observed marriages over time for the region.
 
 ## configs folder
 
