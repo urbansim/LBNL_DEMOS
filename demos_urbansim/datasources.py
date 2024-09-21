@@ -76,69 +76,40 @@ orca.add_injectable("region_type", region_type)
 data_name = "%s_%s_model_data.h5" % (region_type, region_code)
 if calibrated_folder == "custom":
     data_name = "custom_%s" % (data_name)
-# data_name = 'model_data_2017.h5'
 
 orca.add_injectable("data_name", data_name)
 print(data_name)
 
-# Downloading the household totals, income rates, and move in rates
-hhsize_data_name = "data/hsize_ct_%s.csv" % region_code
-hhsize_data = pd.read_csv(
-    hhsize_data_name,
-    dtype={
-        "lcm_county_id": object,
-        "year": int,
-        "hh_size": object,
-        "total_number_of_households": int,
-    },
-)
-hhsize_data = hhsize_data.set_index("year")
-orca.add_table("hsize_ct", hhsize_data)
+def load_calibration_data(region_code):
+    print("Loading calibration data for region:", region_code)
+    calibration_files = {
+        "hsize_ct": ("data/hsize_ct_{}.csv", {"lcm_county_id": object, "year": int, "hh_size": object, "total_number_of_households": float}),
+        "income_rates": ("data/income_growth_rates_{}.csv", {"lcm_county_id": object, "year": int, "rate": float}),
+        "rel_map": ("data/relmap_{}.csv", None),
+        "observed_births_data": ("data/births_over_time_obs_{}.csv", {"year": int, "count": float}),
+        "observed_fatalities_data": ("data/mortalities_over_time_obs_{}.csv", {"year": int, "count": float}),
+        "observed_marrital_data": ("data/marrital_status_over_time_obs_{}.csv", {"year": int, "MAR": int, "count": float}),
+        "observed_entering_workforce": ("data/entering_workforce_obs_{}.csv", {"year": int, "share": float}),
+        "observed_exiting_workforce": ("data/exiting_workforce_obs_{}.csv", {"year": int, "share": float}),
+        "observed_enrollment_data": ("data/enrollment_over_time_obs_{}.csv", {"year": int, "count": float}),
+    }
 
-income_rates_data_name = "data/income_rates_%s.csv" % region_code
-income_rates_data = pd.read_csv(
-    income_rates_data_name, dtype={"lcm_county_id": object, "year": int, "rate": float}
-)
-orca.add_table("income_rates", income_rates_data)
+    for table_name, (file_pattern, dtype) in calibration_files.items():
+        file_name = file_pattern.format(region_code)
+        if not os.path.exists(file_name):
+            raise FileNotFoundError(f"Required file {file_name} not found for {table_name}.")
+        
+        df = pd.read_csv(file_name, dtype=dtype)
+        
+        if table_name == "hsize_ct":
+            df = df.set_index("year")
+        elif table_name == "rel_map":
+            df = df.set_index("index")
+        
+        orca.add_table(table_name, df)
 
-
-rel_map_data_name = "data/relmap_%s.csv" % region_code
-rel_map_data = pd.read_csv(rel_map_data_name).set_index("index")
-orca.add_table("rel_map", rel_map_data)
-
-observed_births_data_name = (
-    "outputs/calibration/%s/births_over_time_obs.csv" % region_code
-)
-observed_births_data = pd.read_csv(observed_births_data_name)
-orca.add_table("observed_births_data", observed_births_data)
-
-observed_fatalities_data_name = (
-    "outputs/calibration/%s/mortalities_over_time_obs.csv" % region_code
-)
-observed_fatalities_data = pd.read_csv(observed_fatalities_data_name)
-orca.add_table("observed_fatalities_data", observed_fatalities_data)
-
-observed_marrital_data_name = (
-    "outputs/calibration/%s/marrital_status_over_time_obs.csv" % region_code
-)
-observed_marrital_data = pd.read_csv(observed_marrital_data_name)
-orca.add_table("observed_marrital_data", observed_marrital_data)
-
-observed_entering_workforce_data_name = (
-    "outputs/calibration/%s/entering_workforce_obs.csv" % region_code
-)
-observed_entering_workforce_data = pd.read_csv(observed_entering_workforce_data_name)
-orca.add_table("observed_entering_workforce", observed_entering_workforce_data)
-
-observed_exiting_workforce_data_name = (
-    "outputs/calibration/%s/exiting_workforce_obs.csv" % region_code
-)
-observed_exiting_workforce_data = pd.read_csv(observed_exiting_workforce_data_name)
-orca.add_table("observed_exiting_workforce", observed_exiting_workforce_data)
-
-# observed_enrollment_data_name = "outputs/calibration/%s/enrollment_over_time_obs.csv" % region_code
-# observed_enrollment_data = pd.read_csv(observed_enrollment_data_name)
-# orca.add_table("observed_enrollment_data", observed_enrollment_data)
+# Load calibration data
+load_calibration_data(region_code)
 
 
 if not all_local:
