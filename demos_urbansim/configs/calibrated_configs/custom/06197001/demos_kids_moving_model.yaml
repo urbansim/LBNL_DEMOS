@@ -36,9 +36,9 @@ saved_object:
     + employ3_agebin5_mo + employ3_agebin2_mo + employ3_agebin3_mo + employ3_agebin4_mo
     + edu2_agebin5_mo + edu2_agebin2_mo + edu2_agebin3_mo + edu2_agebin4_mo + edu3_agebin5_mo
     + edu3_agebin2_mo + edu3_agebin3_mo + edu3_agebin4_mo + 1
-  name: kids_move
+  name: kids_moving_model
   out_column: kid_moves
-  out_filters: relate in [2, 3, 4, 7, 9, 14]
+  out_filters: (relate in [2, 3, 4, 7, 9, 14]) & (age>=16)
   out_tables: persons
   out_transform: null
   out_value_false: 0

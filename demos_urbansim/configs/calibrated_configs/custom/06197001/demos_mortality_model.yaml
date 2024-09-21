@@ -15,7 +15,7 @@ saved_object:
     - 0.60858643
     model_expression: dead ~ age + gender2 + employbin2 + employbin3
         + edubin2 + edubin3 + race1 + marital2 + marital3 + marital4 + 1
-    name: mortality
+    name: mortality_model
     out_column: null
     out_filters: null
     out_tables: null
