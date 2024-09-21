@@ -549,7 +549,7 @@ def load_mode_choice_constants():
 
 load_mode_choice_constants()
 
-def add_missing_combinations(df):
+def add_missing_geometry_combinations(travel_data_df):
     # Get the unique values from each index level
     index_values = [
         df.index.get_level_values(level).unique() for level in range(df.index.nlevels)
@@ -575,9 +575,9 @@ def update_travel_data(travel_data):
     Returns:
     None
     """
-    t = travel_data.local
-    t = add_missing_combinations(t)
-    orca.add_table("travel_data", t)
+    travel_data_df = travel_data.local
+    travel_data_df = add_missing_geometry_combinations(travel_data_df)
+    orca.add_table("travel_data", travel_data_df)
 
 
 # -----------------------------------------------------------------------------------------
