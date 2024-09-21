@@ -1,10 +1,6 @@
-import math
 import os
-import time
 import warnings
 from operator import index
-from typing import Sized
-
 warnings.filterwarnings("ignore")
 
 import indicators
@@ -12,7 +8,6 @@ import numpy as np
 import orca
 import pandana as pdna
 import pandas as pd
-import yaml
 from google.cloud import storage
 from scipy.spatial.distance import cdist
 from urbansim.developer import developer
@@ -124,8 +119,13 @@ def build_networks(blocks, block_groups, nodes, edges):
 
 @orca.step("add_temp_variables")
 def add_temp_variables():
-    """Adds temporary variables to the persons and
-    households tables.
+    """Adds temporary variables to the persons table.
+
+    - 'dead': Initialized to -99, used to track mortality status
+    - 'stop': Initialized to -99, purpose to be determined
+    - 'kid_moves': Initialized to -99, likely used to track children's relocations
+
+    These variables are temporary and will be removed after processing.
     """
     persons = orca.get_table("persons").local
     persons.loc[:, "dead"] = -99
@@ -137,8 +137,14 @@ def add_temp_variables():
 
 @orca.step("remove_temp_variables")
 def remove_temp_variables():
-    """Removes temporary variables from the persons
-    and households tables
+    """Removes temporary variables from the persons table.
+
+    Temporary variables removed:
+    - 'dead': Used to track mortality status
+    - 'stop': Purpose to be determined
+    - 'kid_moves': Likely used to track children's relocations
+
+    These variables were added temporarily and are no longer needed after processing.
     """
     persons = orca.get_table("persons").local
     persons = persons.drop(columns=["dead", "stop", "kid_moves"])
@@ -148,8 +154,6 @@ def remove_temp_variables():
 # -----------------------------------------------
 # DEMOS
 # -----------------------------------------------
-
-
 @orca.step("fatality_model")
 def fatality_model(persons, households, year):
     """Function to run the fatality model at the persons level.
@@ -221,13 +225,8 @@ def aging_model(persons, households):
     # Update age in the persons table
     orca.get_table("persons").update_col("age", persons_df["age"])
     # Update age related columns in the households table
-    for column in [
-        "age_of_head",
-        "hh_age_of_head",
-        "hh_children",
-        "gt55",
-        "hh_seniors",
-    ]:
+    columns_to_update = ["age_of_head", "hh_age_of_head", "hh_children", "gt55", "hh_seniors",]
+    for column in columns_to_update:
         orca.get_table("households").update_col(column, households_df[column])
 
 
@@ -445,26 +444,36 @@ def households_reorg(persons, households, year):
     # Postprocessing
     # ----------------------------------------
     print("Restructuring households:")
+    # postprocess cohabitation to x
     print("Cohabitation-to-X..")
     persons_df, households_df = update_cohabitating_households(
         persons_df, households_df, cohabitate_to_x_preds, metadata
     )
+    # update metadata
     metadata = update_metadata(metadata, households_df, persons_df)
     print_household_stats(persons_df, households_df)
+    # postprocess single to x
     print("Single-to-X..")
+    # update married households
     update_married_households(persons_df, households_df, marriage_list, metadata)
+    # update metadata after married
     metadata = update_metadata(metadata, households_df, persons_df)
+    # update married predictions table
     married_table = update_married_predictions(married_table, marriage_list)
     print_household_stats(persons_df, households_df)
+    # deduplicate multihead households
     persons_df, households_df = deduplicate_multihead_households(
         persons_df, households_df
     )
     print_household_stats(persons_df, households_df)
+    # Postprocess divorce
     print("Divorce..")
     persons_df, households_df = update_divorce(
         persons_df, households_df, divorce_list, metadata
     )
+    # update metadata after divorce
     metadata = update_metadata(metadata, households_df, persons_df)
+    # update divorce predictions table
     divorce_table = update_divorce_predictions(divorce_table, divorce_list)
     print_household_stats(persons_df, households_df)
     persons_df["member_id"] = (
@@ -472,8 +481,9 @@ def households_reorg(persons, households, year):
         .rank(method="first", ascending=True)
         .astype(int)
     )
-
+    # update marrital status stats
     marrital = update_marrital_status_stats(persons_df, marrital, year)
+    # Update orca tables
     orca.add_table("marrital", marrital)
     orca.add_table("persons", persons_df[persons_local_columns])
     orca.add_table("households", households_df[households_local_columns])
@@ -495,7 +505,7 @@ def print_marr_stats(persons):
     """
     # Pulling data
     persons_df = orca.get_table("persons").to_frame(columns=["MAR", "age"])
-    # Printing marrital
+    # Printing marrital status stats
     persons_stats = persons_df[persons_df["age"] >= 15]
     print(persons_stats["MAR"].value_counts().sort_values())
 
@@ -511,7 +521,7 @@ def laborforce_model(persons, households, year):
     Returns:
         None
     """
-    # Pulling data
+    # Pulling relevant data
     persons_df = orca.get_table("persons").local
     persons_df["stay_out"] = -99
     persons_df["leaving_workforce"] = -99
@@ -539,7 +549,7 @@ def laborforce_model(persons, households, year):
     predicted_exit_workforce = calibrate_model(
         out_workforce_model, exiting_workforce_count
     )
-    # Update labor status
+    # Update labor status and postprorcess data
     persons_df = update_labor_status(
         persons_df,
         predicted_remain_unemployed,
@@ -569,9 +579,13 @@ def work_location(persons):
     """
     # Pulling data
     persons_work = orca.get_table("persons").to_frame(columns=["work_block_id"])
-    # NOTE: This workaround is essential for executing the work
-    # location choice in batches, which enhances
-    # simulation efficiency.
+    # NOTE: This workaround of using chooser_batch_size=100000
+    # is essential for executing the work
+    # location choice model in batches of 100,000 
+    # individuals at a time. This approach significantly
+    # enhances simulation efficiency by 
+    # reducing memory usage and improving processing speed,
+    # especially for large populations.
     model = mm.get_step("wlcm")
     model.run(chooser_batch_size=100000)
     # Update work locations table of individuals
@@ -695,18 +709,17 @@ def work_location_stats(persons):
     workers_no_location = len(
         persons_df[(persons_df["worker"] == 1) & (persons_df["work_block_id"] == "-1")]
     )
-    people_no_location = len(persons_df[persons_df["work_block_id"] == "-1"])
+    persons_no_location = len(persons_df[persons_df["work_block_id"] == "-1"])
 
     # Calculate and print the shares
     share_workers_no_location = (
         workers_no_location / total_workers if total_workers else 0
     )
-    share_people_no_location = (
-        people_no_location / total_persons if total_persons else 0
+    share_persons_no_location = (
+        persons_no_location / total_persons if total_persons else 0
     )
-
     print("Share of workers with no work location:", share_workers_no_location)
-    print("Share of people with no work location:", share_people_no_location)
+    print("Share of people with no work location:", share_persons_no_location)
 
 
 # -----------------------------------------------------------------------------------------
@@ -716,7 +729,17 @@ def work_location_stats(persons):
 
 @orca.step("household_transition")
 def household_transition(households, persons, year, metadata):
+    """
+    Run the household transition model.
+    Transition models represent the in/out-migration of households
+    in the region.
 
+    Args:
+        households (Orca table): Orca table of households
+        persons (Orca table): Orca table of persons
+        year (int): simulation year
+        metadata (Orca table): Orca table of metadata
+    """
     linked_tables = {"persons": (persons, "household_id")}
     if ("annual_household_control_totals" in orca.list_tables()) and (
         "use_database_control_totals" not in orca.list_injectables()
@@ -1060,22 +1083,55 @@ def update_linked_table(tbl, col_name, added, copied, removed):
 
 @orca.step("households_relocation_basic")
 def households_relocation_basic(households):
+    """
+    orca step to run a simple relocation model.
+
+    Parameters
+    ----------
+    households : DataFrameWrapper
+        Table of households
+
+    Returns
+    -------
+    function to run the simple relocation model
+    """
     return simple_relocation(households, 0.034, "block_id")
 
 
 def simple_relocation(choosers, relocation_rate, fieldname):
+    """
+    Run a simple relocation model.
+
+    Parameters
+    ----------
+    choosers : DataFrameWrapper
+        Table of choosers
+    relocation_rate : float
+        Rate of relocation
+    fieldname : str
+        Fieldname of the choosers table to update with the relocation status
+
+    Returns
+    -------
+    None
+    """
     print("Total agents: %d" % len(choosers))
-    print("Total currently unplaced: %d" % choosers[fieldname].value_counts().get("-1", 0))
+    print(
+        "Total currently unplaced: %d" % choosers[fieldname].value_counts().get("-1", 0)
+    )
     print("Assigning for relocation...")
-    chooser_ids = np.random.choice(choosers.index, size=int(relocation_rate * len(choosers)), replace=False)
-    choosers.update_col_from_series(fieldname, pd.Series('-1', index=chooser_ids))
-    print("Total currently unplaced: %d" % choosers[fieldname].value_counts().get("-1", 0))
+    chooser_ids = np.random.choice(
+        choosers.index, size=int(relocation_rate * len(choosers)), replace=False
+    )
+    choosers.update_col_from_series(fieldname, pd.Series("-1", index=chooser_ids))
+    print(
+        "Total currently unplaced: %d" % choosers[fieldname].value_counts().get("-1", 0)
+    )
+
 
 # -----------------------------------------------------------------------------------------
 # POSTPROCESSING
 # -----------------------------------------------------------------------------------------
-
-
 @orca.step("generate_outputs")
 def generate_outputs(year, base_year, forecast_year, tracts):
     print(
@@ -1221,7 +1277,9 @@ if orca.get_injectable("running_calibration_routine") == False:
                 elcm_models += ["elcm_pf"]
 
         developer_models = ["supply_transition"] + rdplcm_models
-        household_models = ["household_transition"] + ["households_relocation_basic"] + hlcm_models
+        household_models = (
+            ["household_transition"] + ["households_relocation_basic"] + hlcm_models
+        )
         employment_models = ["job_transition"] + elcm_models
         location_models = rdplcm_models + hlcm_models + elcm_models
         calibrated_folder = orca.get_injectable("calibrated_folder")
@@ -1286,9 +1344,11 @@ if orca.get_injectable("running_calibration_routine") == False:
         developer_models = ["supply_transition"] + [
             "rdplcm" + str(segment) for segment in range(0, 4)
         ]
-        household_models = ["household_transition"] + ["households_relocation_basic"] + ["household_stats"], [
-            "hlcm" + str(segment) for segment in range(1, 11)
-        ]
+        household_models = (
+            ["household_transition"]
+            + ["households_relocation_basic"]
+            + ["hlcm" + str(segment) for segment in range(1, 11)]
+        )
         employment_models = ["job_transition"] + [
             "elcm" + str(segment) for segment in range(0, 6)
         ]
