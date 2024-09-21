@@ -154,8 +154,8 @@ def remove_temp_variables():
 # -----------------------------------------------
 # DEMOS
 # -----------------------------------------------
-@orca.step("fatality_model")
-def fatality_model(persons, households, year):
+@orca.step("mortality")
+def mortality(persons, households, year):
     """Function to run the fatality model at the persons level.
     The function also updates the persons and households tables,
     and saves the mortalities table.
@@ -202,8 +202,8 @@ def fatality_model(persons, households, year):
     orca.add_table("metadata", metadata)
 
 
-@orca.step("aging_model")
-def aging_model(persons, households):
+@orca.step("aging")
+def aging(persons, households):
     """
     This function updates the age of the persons table and
     updates the age of the household head in the household table.
@@ -255,10 +255,11 @@ def income_model(persons, households, year):
     orca.add_table("households", households_df[households_local_columns])
 
 
-@orca.step("education_model")
-def education_model(persons, year):
+@orca.step("education")
+def education(persons, year):
     """
-    Run the education model and update the persons table
+    Run the education model and update the persons table.
+    The education model predicts students who stop schooling.
 
     Args:
         persons (DataFrameWrapper): DataFrameWrapper of the persons table
@@ -272,6 +273,7 @@ def education_model(persons, year):
     persons_df["stop"] = -99
     orca.add_table("persons", persons_df)
     # Run the education model
+    # Education model is 
     edu_model = mm.get_step("education_model")
     edu_model.run()
     student_list = edu_model.choices.astype(int)
@@ -282,8 +284,8 @@ def education_model(persons, year):
     orca.get_table("persons").update_col("student", persons_df["student"])
 
 
-@orca.step("birth_model")
-def birth_model(persons, households, year):
+@orca.step("household_birth")
+def household_birth(persons, households, year):
     """
     Function to run the birth model at the household level.
     The function updates the persons table.
@@ -312,7 +314,7 @@ def birth_model(persons, households, year):
         birth_eligible_hh_count_df, eligible_household_ids, year
     )
     # Run model
-    birth = mm.get_step("birth_model")
+    birth = mm.get_step("household_birth_model")
     eligible_household_ids = str(eligible_household_ids)
     birth.filters = "index in " + eligible_household_ids
     birth.out_filters = "index in " + eligible_household_ids
@@ -339,8 +341,8 @@ def birth_model(persons, households, year):
     orca.add_table("btable", btable_df)
 
 
-@orca.step("kids_moving_model")
-def kids_moving_model(persons, households):
+@orca.step("kids_moving")
+def kids_moving(persons, households):
     """
     Running the kids moving model and updating household
     stats.
@@ -510,8 +512,8 @@ def print_marr_stats(persons):
     print(persons_stats["MAR"].value_counts().sort_values())
 
 
-@orca.step("laborforce_model")
-def laborforce_model(persons, households, year):
+@orca.step("laborforce_participation")
+def laborforce_participation(persons, households, year):
     """
     Run the education model and update the persons table
 
@@ -1378,13 +1380,13 @@ if orca.get_injectable("running_calibration_routine") == False:
         add_variables = ["add_temp_variables"]
         start_of_year_models = ["status_report"]
         demo_models = [
-            # "aging_model",
-            # "laborforce_model",
-            "households_reorg",
-            # "kids_moving_model",
-            "fatality_model",
-            "birth_model",
-            # "education_model",
+            # "aging",
+            # "laborforce_participation",
+            # "households_reorg",
+            "kids_moving",
+            # "mortality",
+            "household_birth",
+            # "education",
         ]
         pre_processing_steps = price_models + [
             "build_networks",
@@ -1399,6 +1401,7 @@ if orca.get_injectable("running_calibration_routine") == False:
         mlcm_postprocessing = ["mlcm_postprocessing"]
         income_model = ["income_model"]
         steps_all_years = (
+            add_variables +
             start_of_year_models
             + demo_models
             # + work_models
