@@ -46,9 +46,7 @@ def run(
     mm.initialize('configs/' + configs_folder)
     orca.run(orca.get_injectable('pre_processing_steps'))
 
-    # for table in models.demos_tables:
-    #     orca.add_table(table, pd.DataFrame())
-    # print(datasources.hdf_tables)
+
     if table_save:
         out_tables = datasources.hdf_tables + ["graveyard"]
     else:
@@ -64,14 +62,6 @@ def run(
         out_run_local=True,
         out_interval= 1
     )
-    # update_demos.dead_facts()
-    # update_demos.calculate(True)
-    # update_demos.export('pop_over_time')
-    # update_demos.export('age_over_time')
-    # update_demos.export('edu_over_time')
-    # update_demos.export('households')
-    # update_demos.export('graveyard')
-    # orca.run(orca.get_injectable('export_demo_stats'))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -126,6 +116,4 @@ if __name__ == '__main__':
     data_stats = os.stat('data/{0}'.format(input_data_name))
     uid = data_stats.st_uid
     gid = data_stats.st_gid
-    # uid = pwd.getpwnam(usernmae).pw_uid
-    # gid = grp.getgrnam(groupname).gr_gid
     os.chown(output_fname, uid, gid)
