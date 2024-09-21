@@ -180,7 +180,7 @@ def fatality_model(persons, households, year):
     target_count = observed_fatalities_df.query(f"year == {year}")["count"].squeeze()
 
     # Calibrate the mortality model
-    mortality = mm.get_step("mortality")
+    mortality = mm.get_step("mortality_model")
     fatality_list = calibrate_model(mortality, target_count)
     predicted_fatalities = fatality_list.sum()
     # Update households and persons tables
@@ -272,7 +272,7 @@ def education_model(persons, year):
     persons_df["stop"] = -99
     orca.add_table("persons", persons_df)
     # Run the education model
-    edu_model = mm.get_step("education")
+    edu_model = mm.get_step("education_model")
     edu_model.run()
     student_list = edu_model.choices.astype(int)
     # Update student status
@@ -312,7 +312,7 @@ def birth_model(persons, households, year):
         birth_eligible_hh_count_df, eligible_household_ids, year
     )
     # Run model
-    birth = mm.get_step("birth")
+    birth = mm.get_step("birth_model")
     eligible_household_ids = str(eligible_household_ids)
     birth.filters = "index in " + eligible_household_ids
     birth.out_filters = "index in " + eligible_household_ids
@@ -362,7 +362,7 @@ def kids_moving_model(persons, households):
     metadata = orca.get_table("metadata").to_frame()
     kids_moving_table = orca.get_table("kids_move_table").to_frame()
     # Running model
-    kids_moving_model = mm.get_step("kids_move")
+    kids_moving_model = mm.get_step("kids_moving_model")
     kids_moving_model.run()
     kids_moving = kids_moving_model.choices.astype(int)
     # Post-process persons and households
@@ -401,7 +401,7 @@ def households_reorg(persons, households, year):
     # ----------------------------------------
     # Marriage Model
     # ----------------------------------------
-    marriage_model = orca.get_injectable("marriage_model")
+    marriage_model = orca.get_injectable("single_to_x_model")
     marriage_coeffs = pd.DataFrame(marriage_model["model_coeffs"])
     marriage_variables = pd.DataFrame(marriage_model["spec_names"])
     marriage_variables = marriage_variables[0].values.tolist()
@@ -418,7 +418,7 @@ def households_reorg(persons, households, year):
     households_df["divorced"] = -99
     orca.add_table("households", households_df)
     divorce_eligible_hh_ids = get_divorce_eligible_household_ids(persons_df)
-    divorce_model = mm.get_step("divorce")
+    divorce_model = mm.get_step("divorce_model")
     divorce_eligible_hh_ids = str(divorce_eligible_hh_ids)
     divorce_model.filters = "index in " + divorce_eligible_hh_ids
     divorce_model.out_filters = "index in " + divorce_eligible_hh_ids
@@ -428,7 +428,7 @@ def households_reorg(persons, households, year):
     # ----------------------------------------
     # Cohabitation_to_X Model
     # ----------------------------------------
-    cohabitation_model = orca.get_injectable("cohabitation_model")
+    cohabitation_model = orca.get_injectable("cohabitation_to_x_model")
     cohabitation_coeffs = pd.DataFrame(cohabitation_model["model_coeffs"])
     cohabitation_variables = pd.DataFrame(cohabitation_model["spec_names"])
     cohabitation_variables = cohabitation_variables[0].values.tolist()
@@ -540,12 +540,12 @@ def laborforce_model(persons, households, year):
         )
     )
     # Running entering workforce model
-    in_workforce_model = mm.get_step("enter_labor_force")
+    in_workforce_model = mm.get_step("enter_labor_force_model")
     predicted_remain_unemployed = calibrate_model(
         in_workforce_model, entering_workforce_count
     )
     # Running exiting workforce model
-    out_workforce_model = mm.get_step("exit_labor_force")
+    out_workforce_model = mm.get_step("exit_labor_force_model")
     predicted_exit_workforce = calibrate_model(
         out_workforce_model, exiting_workforce_count
     )
