@@ -73,29 +73,32 @@ elif len(region_code) == 8:
 else:
     region_type = "region"
 orca.add_injectable("region_type", region_type)
-data_name = '%s_%s_model_data.h5' % (region_type, region_code)
-if calibrated_folder == 'custom':
-    data_name = 'custom_%s' % (data_name)
+data_name = "%s_%s_model_data.h5" % (region_type, region_code)
+if calibrated_folder == "custom":
+    data_name = "custom_%s" % (data_name)
 # data_name = 'model_data_2017.h5'
 
-orca.add_injectable('data_name', data_name)
+orca.add_injectable("data_name", data_name)
 print(data_name)
 
 # Downloading the household totals, income rates, and move in rates
 hhsize_data_name = "data/hsize_ct_%s.csv" % region_code
-hhsize_data = pd.read_csv(hhsize_data_name,
-                          dtype={"lcm_county_id": object,
-                                 "year": int,
-                                 "hh_size": object,
-                                 "total_number_of_households": int})
+hhsize_data = pd.read_csv(
+    hhsize_data_name,
+    dtype={
+        "lcm_county_id": object,
+        "year": int,
+        "hh_size": object,
+        "total_number_of_households": int,
+    },
+)
 hhsize_data = hhsize_data.set_index("year")
 orca.add_table("hsize_ct", hhsize_data)
 
 income_rates_data_name = "data/income_rates_%s.csv" % region_code
-income_rates_data = pd.read_csv(income_rates_data_name,
-                                dtype={"lcm_county_id": object,
-                                       "year": int,
-                                       "rate": float})
+income_rates_data = pd.read_csv(
+    income_rates_data_name, dtype={"lcm_county_id": object, "year": int, "rate": float}
+)
 orca.add_table("income_rates", income_rates_data)
 
 
@@ -103,23 +106,33 @@ rel_map_data_name = "data/relmap_%s.csv" % region_code
 rel_map_data = pd.read_csv(rel_map_data_name).set_index("index")
 orca.add_table("rel_map", rel_map_data)
 
-observed_births_data_name = "outputs/calibration/%s/births_over_time_obs.csv" % region_code
-observed_births_data = pd.read_csv(observed_births_data_name) 
+observed_births_data_name = (
+    "outputs/calibration/%s/births_over_time_obs.csv" % region_code
+)
+observed_births_data = pd.read_csv(observed_births_data_name)
 orca.add_table("observed_births_data", observed_births_data)
 
-observed_fatalities_data_name = "outputs/calibration/%s/mortalities_over_time_obs.csv" % region_code
+observed_fatalities_data_name = (
+    "outputs/calibration/%s/mortalities_over_time_obs.csv" % region_code
+)
 observed_fatalities_data = pd.read_csv(observed_fatalities_data_name)
 orca.add_table("observed_fatalities_data", observed_fatalities_data)
 
-observed_marrital_data_name = "outputs/calibration/%s/marrital_status_over_time_obs.csv" % region_code
+observed_marrital_data_name = (
+    "outputs/calibration/%s/marrital_status_over_time_obs.csv" % region_code
+)
 observed_marrital_data = pd.read_csv(observed_marrital_data_name)
 orca.add_table("observed_marrital_data", observed_marrital_data)
 
-observed_entering_workforce_data_name = "outputs/calibration/%s/entering_workforce_obs.csv" % region_code
+observed_entering_workforce_data_name = (
+    "outputs/calibration/%s/entering_workforce_obs.csv" % region_code
+)
 observed_entering_workforce_data = pd.read_csv(observed_entering_workforce_data_name)
 orca.add_table("observed_entering_workforce", observed_entering_workforce_data)
 
-observed_exiting_workforce_data_name = "outputs/calibration/%s/exiting_workforce_obs.csv" % region_code
+observed_exiting_workforce_data_name = (
+    "outputs/calibration/%s/exiting_workforce_obs.csv" % region_code
+)
 observed_exiting_workforce_data = pd.read_csv(observed_exiting_workforce_data_name)
 orca.add_table("observed_exiting_workforce", observed_exiting_workforce_data)
 
@@ -169,12 +182,13 @@ hdf_tables = [
     "household_validation_acs",
     "unit_validation",
     "job_validation",
-    "school_locations",
-    "work_locations"
-    
+    "student_school_assignment",
+    "work_locations",
 ]
-mlcm_tables = {"school_locations": ["person_id", "school_id"],
-    "work_locations": ["person_id", "work_block_id"]}
+mlcm_tables = {
+    "student_school_assignment": ["person_id", "school_id"],
+    "work_locations": ["person_id", "work_block_id"],
+}
 
 for t, c in mlcm_tables.items():
     data = pd.DataFrame(columns=c)
@@ -209,41 +223,52 @@ if "metadata" not in orca.list_tables():
     store["metadata"] = metadata
     store.close()
 
+# Adding location indicator columns to persons table
 persons = orca.get_table("persons").local
-# breakpoint()
-print(persons.columns)
 persons["work_block_id"] = "-1"
 persons["workplace_taz"] = "-1"
 persons["school_id"] = "-1"
 persons["school_block_id"] = "-1"
 persons["school_taz"] = "-1"
-
 orca.add_table("persons", persons)
 
-# breakpoint()
 
 # Getting income distribution
-
 persons = orca.get_table("persons").local
 # Define the intervals for age and education
 age_intervals = [0, 20, 30, 40, 50, 65, 900]
 education_intervals = [0, 18, 22, 200]
 
 # Define the labels for age and education groups
-age_labels = ['lte20', '21-29', '30-39', '40-49', '50-64', 'gte65']
-education_labels = ['lte17', '18-21', 'gte22']
+age_labels = ["lte20", "21-29", "30-39", "40-49", "50-64", "gte65"]
+education_labels = ["lte17", "18-21", "gte22"]
 # Create age and education groups with labels
-persons['age_group'] = pd.cut(persons['age'], bins=age_intervals, labels=age_labels, include_lowest=True).astype(str)
-persons['education_group'] = pd.cut(persons['edu'], bins=education_intervals, labels=education_labels, include_lowest=True).astype(str)
+persons["age_group"] = pd.cut(
+    persons["age"], bins=age_intervals, labels=age_labels, include_lowest=True
+).astype(str)
+persons["education_group"] = pd.cut(
+    persons["edu"],
+    bins=education_intervals,
+    labels=education_labels,
+    include_lowest=True,
+).astype(str)
 
 # Group by age and education groups and calculate mean and std deviation of earning
-income_dist = persons[persons["worker"]==1].groupby(['age_group', 'education_group']).agg(
-    data_mean = ('earning', 'mean'),
-    data_std = ('earning', 'std')).reset_index()
+income_dist = (
+    persons[persons["worker"] == 1]
+    .groupby(["age_group", "education_group"])
+    .agg(data_mean=("earning", "mean"), data_std=("earning", "std"))
+    .reset_index()
+)
 
 # Convert to the parameters of the underlying normal distribution
-income_dist["mu"] = np.log(income_dist["data_mean"]**2 / np.sqrt(income_dist["data_std"]**2 + income_dist["data_mean"]**2))
-income_dist["sigma"] = np.sqrt(np.log(1 + income_dist["data_std"]**2 / income_dist["data_mean"]**2))
+income_dist["mu"] = np.log(
+    income_dist["data_mean"] ** 2
+    / np.sqrt(income_dist["data_std"] ** 2 + income_dist["data_mean"] ** 2)
+)
+income_dist["sigma"] = np.sqrt(
+    np.log(1 + income_dist["data_std"] ** 2 / income_dist["data_mean"] ** 2)
+)
 
 orca.add_table("income_dist", income_dist)
 
@@ -467,38 +492,68 @@ orca.add_table("ect", ect.set_index("year"))
 # -----------------------------------------------------------------------------------------
 # ADD ACTIVITYSIM SKIMS DATA
 # -----------------------------------------------------------------------------------------
-skims = omx.open_file('data/skims_mpo_{}.omx'.format(region_code),'r')
-orca.add_injectable('asim_skims', skims)
 
-# Mode Choice Constants (Consider moving them to .yaml file)
-# Here as a place holder for now
-orca.add_injectable('cost_per_mile', 18.0) # 18 cents per miles
-orca.add_injectable('walkThresh', 2.0) #2 miles
-orca.add_injectable('walkSpeed', 3.0) #3 miles per hour
-orca.add_injectable('bikeThresh', 6.0) #2 miles
-orca.add_injectable('bikeSpeed', 12.00) #3 miles per hour
-orca.add_injectable('ivt_cost_multiplier', 0.6)
-orca.add_injectable('costShareSr2', 1.75)
-orca.add_injectable('costShareSr3', 2.50)
-orca.add_injectable('short_i_wait_multiplier', 2.0)
-orca.add_injectable('waitThresh', 10.00)
-orca.add_injectable('long_i_wait_multiplier', 1.0 )
-orca.add_injectable('xwait_multiplier', 2.0)
-orca.add_injectable('wacc_multiplier', 2.0)
-orca.add_injectable('wegr_multiplier', 2.0)
-orca.add_injectable('shortWalk', 0.333)
-orca.add_injectable('longWalk', 0.667)
-orca.add_injectable('tnc_baseline', 2.20)
-orca.add_injectable('tnc_cost_minute', 0.24)
-orca.add_injectable('tnc_cost_mile', 1.33)
-orca.add_injectable('tnc_min_fare', 7.20)
-orca.add_injectable('avg_parking_cost', 2.50)
-orca.add_injectable('transit_change', 1)
+def load_activitysim_skims(region_code):
+    """
+    Loads ActivitySim skims data from a specified file.
 
+    Parameters:
+    region_code (str): The region code for the skims data.
+
+    Returns:
+    bool: True if the skims data was successfully loaded, False otherwise.
+    """
+    skims_file = f"data/skims_mpo_{region_code}.omx"
+    if os.path.exists(skims_file):
+        try:
+            skims = omx.open_file(skims_file, "r")
+            orca.add_injectable("asim_skims", skims)
+            orca.add_injectable("asim_skims_loaded", True)
+            print(f"Successfully loaded skims data from {skims_file}")
+            return True
+        except Exception as e:
+            orca.add_injectable("asim_skims_loaded", False)
+            print(f"Failed to load skims data: {str(e)}")
+    else:
+        print(f"Skims file not found: {skims_file}")
+        orca.add_injectable("asim_skims", False)
+        orca.add_injectable("asim_skims_loaded", False)
+    return False
+
+# Load ActivitySim skims data
+asim_skims_loaded = load_activitysim_skims(region_code)
+
+if not asim_skims_loaded:
+    print("ActivitySim skims data not loaded.")
+    print("Accessibility measures based on travel times will not be calculated.")
+    print("HLCM and WLCM models will not support logsum variables.")
+    print("Please ensure to use appropriate model specifications for HLCM and WLCM")
+    print("that do not include logsum variables based on ActivitySim skims.")
+
+def load_mode_choice_constants():
+    mode_choice_settings_path = 'configs/mode_choice_settings.yaml'
+    if not os.path.exists(mode_choice_settings_path):
+        print(f"Warning: Mode choice constants file not found at {mode_choice_settings_path}")
+        return
+    
+    try:
+        with open(mode_choice_settings_path, 'r') as file:
+            constants = yaml.safe_load(file)
+        
+        for key, value in constants.items():
+            orca.add_injectable(key, value)
+        
+        print(f"Mode choice constants loaded successfully from {mode_choice_settings_path}")
+    except Exception as e:
+        print(f"Error loading mode choice constants from {mode_choice_settings_path}: {str(e)}")
+
+load_mode_choice_constants()
 
 def add_missing_combinations(df):
     # Get the unique values from each index level
-    index_values = [df.index.get_level_values(level).unique() for level in range(df.index.nlevels)]
+    index_values = [
+        df.index.get_level_values(level).unique() for level in range(df.index.nlevels)
+    ]
 
     # Generate all possible pair combinations
     index_pairs = list(product(*index_values))
@@ -508,11 +563,23 @@ def add_missing_combinations(df):
 
     return new_df
 
-@orca.step('update_travel_data')
+
+@orca.step("update_travel_data")
 def update_travel_data(travel_data):
+    """
+    Update the travel data table by adding missing combinations.
+
+    Parameters:
+    travel_data (orca.DataFrameWrapper): The travel data table to update.
+
+    Returns:
+    None
+    """
     t = travel_data.local
     t = add_missing_combinations(t)
-    orca.add_table('travel_data', t)
+    orca.add_table("travel_data", t)
+
+
 # -----------------------------------------------------------------------------------------
 # ADD DEMOS TABLES
 # -----------------------------------------------------------------------------------------
@@ -526,7 +593,7 @@ demos_tables = [
     "persons_mv_out",
     "household_mv_in",
     "btable",
-    "btable_elig",
+    "birth_eligible_hh_count",
     "motable",
     "mohtable",
     "pmovein",
@@ -547,46 +614,51 @@ demos_tables = [
     "hhmovein_over_time",
     "student_population",
     "marrital",
-    "exiting_workforce",
-    "entering_workforce",
-    "school_locations",
-    "work_locations"
+    "workforce_stats",
+    "student_school_assignment",
+    "work_locations",
 ]
 
 for table in demos_tables:
     orca.add_table(table, pd.DataFrame())
 
-
-# orca.add_injectable("max_p_id", orca.get_table("persons").local.index.max())
-# orca.add_injectable("max_hh_id", orca.get_table("households").local.index.max())
-
+# Add injectables of persons and households local columns
 orca.add_injectable("persons_local_cols", orca.get_table("persons").local.columns)
 orca.add_injectable("households_local_cols", orca.get_table("households").local.columns)
 
-geoid_to_zone = pd.read_csv("data/geoid_to_zone.csv", dtype={"GEOID": str, "zone_id": str})
+# ------------------------------------------------------------
+# SCHOOL DATA
+# ------------------------------------------------------------
+# Data needed for school location choice models
+geoid_to_zone = pd.read_csv(
+    "data/geoid_to_zone.csv", dtype={"GEOID": str, "zone_id": str}
+)
 geoid_to_zone["GEOID10"] = geoid_to_zone["GEOID"].copy()
-
 blocks_districts = pd.read_csv("data/blocks_school_districts_2010.csv")
-blocks_districts["UNIFIED_DISTRICT"] = np.where(blocks_districts["SCHOOL_DIST_TYPE"]=="UNIFIED", 1, 0)
-blocks_districts["GEOID10"] = ["0"+str(x) for x in blocks_districts["GEOID10_BLOCK"]]
-blocks_districts["GEOID10_SD"] = ["0"+str(x) for x in blocks_districts["GEOID10_SD"]]
-blocks_districts["DISTRICT_LEVEL"] = blocks_districts.apply(lambda row: (row['GEOID10_SD'], row['DET_DIST_TYPE']), axis=1)
+blocks_districts["UNIFIED_DISTRICT"] = np.where(
+    blocks_districts["SCHOOL_DIST_TYPE"] == "UNIFIED", 1, 0
+)
+blocks_districts["GEOID10"] = ["0" + str(x) for x in blocks_districts["GEOID10_BLOCK"]]
+blocks_districts["GEOID10_SD"] = ["0" + str(x) for x in blocks_districts["GEOID10_SD"]]
+blocks_districts["DISTRICT_LEVEL"] = blocks_districts.apply(
+    lambda row: (row["GEOID10_SD"], row["DET_DIST_TYPE"]), axis=1
+)
 blocks_districts = blocks_districts.merge(geoid_to_zone, how="left", on=["GEOID10"])
 blocks_districts = blocks_districts.rename(columns={"zone_id": "school_taz"})
 blocks_districts["school_block_id"] = blocks_districts["GEOID10"].copy()
 
+schools_df = pd.read_csv(
+    "data/schools_2010.csv", dtype={"GEOID10": str, "SCHOOL_ID": str}
+)
+schools_df["CAP_TOTAL_INC"] = schools_df["CAP_TOTAL"] * 1.2
+schools_df["REM_CAP"] = schools_df["CAP_TOTAL_INC"]
+schools_df["GEOID10"] = ["0" + str(x) for x in schools_df["GEOID10"]]
+schools_df["GEOID10_SD"] = ["0" + str(x) for x in schools_df["NCESDist"]]
+schools_df["school_id"] = schools_df["SCHOOL_ID"].copy()
+schools_df = schools_df[~(schools_df["school_id"] == "0000000")].copy()
+
 orca.add_table("blocks_districts", blocks_districts)
 orca.add_table("geoid_to_zone", geoid_to_zone)
-
-
-schools_df = pd.read_csv("data/schools_2010.csv", dtype={"GEOID10": str, "SCHOOL_ID": str})
-schools_df['CAP_TOTAL_INC'] = schools_df['CAP_TOTAL'] * 1.2
-schools_df['REM_CAP'] = schools_df['CAP_TOTAL_INC']
-schools_df["GEOID10"] = ["0"+str(x) for x in schools_df["GEOID10"]]
-schools_df["GEOID10_SD"] = ["0"+str(x) for x in schools_df["NCESDist"]]
-schools_df["school_id"] = schools_df["SCHOOL_ID"].copy()
-schools_df = schools_df[~(schools_df["school_id"]=="0000000")].copy()
-
 orca.add_table("schools", schools_df)
 
 # -----------------------------------------------------------------------------------------
@@ -600,8 +672,9 @@ else:
     print("Output path exists!")
 orca.add_injectable("output_folder", output_folder)
 
+
 # ----------------------------------------------------------------------------------------
-# ADD NONURBANSIM TEMPLATE MODELS
+# ADD NON-URBANSIM TEMPLATE MODELS
 # -----------------------------------------------------------------------------------------
 def read_yaml(path):
     """A function to read YAML file"""
@@ -609,15 +682,22 @@ def read_yaml(path):
         config = list(yaml.safe_load_all(f))[0]
 
     return config
+
+
 region_code = orca.get_injectable("region_code")
 calibrated_folder = orca.get_injectable("calibrated_folder")
 skim_source = orca.get_injectable("skim_source")
-calibrated_path = os.path.join(
-    'calibrated_configs/', calibrated_folder, region_code)
-if os.path.exists(os.path.join('configs', calibrated_path, skim_source)):
+calibrated_path = os.path.join("calibrated_configs/", calibrated_folder, region_code)
+if os.path.exists(os.path.join("configs", calibrated_path, skim_source)):
     calibrated_path = os.path.join(calibrated_path, skim_source)
-configs_folder = 'configs/' + calibrated_path if orca.get_injectable('calibrated') else 'estimated_configs'
+configs_folder = (
+    "configs/" + calibrated_path
+    if orca.get_injectable("calibrated")
+    else "estimated_configs"
+)
+
 marriage_model = read_yaml(configs_folder + "/marriage.yml")
-orca.add_injectable("marriage_model", marriage_model)
 cohabitation_model = read_yaml(configs_folder + "/cohabitation.yaml")
+
+orca.add_injectable("marriage_model", marriage_model)
 orca.add_injectable("cohabitation_model", cohabitation_model)

@@ -1,0 +1,3 @@
+demos_urbansim/notebooks/*
+!demos_urbansim/notebooks/.gitkeep
+demos_urbansim/notebooks/.ipynb_checkpoints/
