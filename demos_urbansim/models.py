@@ -1339,13 +1339,13 @@ if orca.get_injectable("running_calibration_routine") == False:
         add_variables = ["add_temp_variables"]
         start_of_year_models = ["status_report"]
         demo_models = [
-            # "aging",
-            # "laborforce_participation",
-            # "households_reorg",
+            "aging",
+            "laborforce_participation",
+            "households_reorg",
             "kids_moving",
-            # "mortality",
+            "mortality",
             "household_birth",
-            # "education",
+            "education",
         ]
         pre_processing_steps = price_models + [
             "build_networks",
@@ -1357,20 +1357,18 @@ if orca.get_injectable("running_calibration_routine") == False:
         school_models = ["school_location"]
         end_of_year_models = ["generate_outputs"]
         work_models = ["work_location"]
-        mlcm_postprocessing = ["mlcm_postprocessing"]
         income_model = ["income_model"]
         steps_all_years = (
             add_variables +
             start_of_year_models
-            # + demo_models
+            + demo_models
             + work_models
-            # + school_models
-            # + price_models
-            # + developer_models
-            # + household_models
-            # + employment_models
-            # + end_of_year_models
-            # + mlcm_postprocessing
+            + school_models
+            + price_models
+            + developer_models
+            + household_models
+            + employment_models
+            + end_of_year_models
             + export_demo_steps
         )
     else:
