@@ -579,8 +579,6 @@ def work_location(persons):
     Args:
         persons (Orca table): persons orca table
     """
-    # Pulling data
-    persons_work = orca.get_table("persons").to_frame(columns=["work_block_id"])
     # NOTE: This workaround of using chooser_batch_size=100000
     # is essential for executing the work
     # location choice model in batches of 100,000 
@@ -591,8 +589,25 @@ def work_location(persons):
     model = mm.get_step("wlcm")
     model.run(chooser_batch_size=100000)
     # Update work locations table of individuals
-    persons_work = persons_work.reset_index()
-    orca.add_table("work_locations", persons_work.fillna("-1"))
+    persons_df = orca.get_table("persons").local
+    persons_local_cols = orca.get_injectable("persons_local_cols")
+    blocks_df = orca.get_table("blocks").to_frame(columns=["zone_id"])
+    persons_df["work_block_id"] = persons_df["work_block_id"].fillna("-1")
+    # Create a mapping of block_id to zone_id
+    block_to_zone = blocks_df["zone_id"].to_dict()
+
+    # Update workplace_taz using the mapping
+    persons_df["workplace_taz"] = persons_df["work_block_id"].map(block_to_zone).fillna(persons_df["workplace_taz"])
+    
+    # Ensure workplace_taz is "-1" where work_block_id is "-1"
+    persons_df.loc[persons_df["work_block_id"] == "-1", "workplace_taz"] = "-1"
+
+    # Update work_zone_id to match workplace_taz
+    persons_df["work_zone_id"] = persons_df["workplace_taz"]
+
+    # Update the persons table
+    orca.add_table("persons", persons_df[persons_local_cols])
+    orca.add_table("work_locations", persons_df[["work_block_id"]].reset_index())
 
 
 @orca.step("school_location")
@@ -639,59 +654,6 @@ def school_location(persons, households, year):
     )
 
 
-@orca.step("mlcm_postprocessing")
-def mlcm_postprocessing(persons):
-    """Geographically assign work and school locations
-    to workers and students
-
-    Args:
-        persons (Orca table): Orca table of persons
-    """
-    # Pulling data
-    persons_df = orca.get_table("persons").local
-    persons_local_cols = orca.get_injectable("persons_local_cols")
-    geoid_to_zone = orca.get_table("geoid_to_zone").to_frame()
-    # Updating work locations (blocks and TAZs)
-    persons_df = update_work_locations(persons_df, geoid_to_zone)
-    orca.add_table("persons", persons_df[persons_local_cols])
-
-
-def update_work_locations(persons_df, geoid_to_zone):
-    """
-    Update work locations for persons based on their work block ID.
-
-    Args:
-        persons_df (pd.DataFrame): DataFrame containing person information.
-        geoid_to_zone (pd.DataFrame): DataFrame mapping GEOIDs to zones.
-
-    Returns:
-        pd.DataFrame: Updated persons DataFrame with work locations.
-    """
-    # Pre-processing
-    persons_df = persons_df.reset_index()
-    geoid_to_zone = geoid_to_zone.rename(
-        columns={"GEOID10": "work_block_id", "zone_id": "workplace_taz"}
-    )
-
-    # Assigning tazs and block ids based on work block id
-    persons_df = persons_df.merge(
-        geoid_to_zone[["work_block_id", "workplace_taz"]],
-        on="work_block_id",
-        how="left",
-        suffixes=("", "_replace"),
-    )
-
-    # Update workplace_taz and work_zone_id
-    persons_df["workplace_taz"] = persons_df["workplace_taz_replace"].fillna("-1")
-    persons_df["work_zone_id"] = persons_df["workplace_taz"]
-
-    # Clean up and set index
-    persons_df = persons_df.drop(columns=["workplace_taz_replace"])
-    persons_df = persons_df.set_index("person_id")
-
-    return persons_df
-
-
 @orca.step("work_location_stats")
 def work_location_stats(persons):
     """Function to generate persons work location
@@ -701,27 +663,24 @@ def work_location_stats(persons):
         persons (Orca table): persons orca table
     """
     # Load the 'persons' table into a DataFrame
-    persons_df = orca.get_table("persons").to_frame(columns=["work_block_id", "worker"])
+    workers_locations_df = orca.get_table("persons").to_frame(columns=["work_block_id", "worker"])
 
     # Count total number of persons and workers
-    total_persons = len(persons_df)
-    total_workers = len(persons_df[persons_df["worker"] == 1])
+    total_persons = len(workers_locations_df)
+    total_workers = workers_locations_df["worker"].sum()
 
     # Count workers and people with no work location
-    workers_no_location = len(
-        persons_df[(persons_df["worker"] == 1) & (persons_df["work_block_id"] == "-1")]
-    )
-    persons_no_location = len(persons_df[persons_df["work_block_id"] == "-1"])
+    no_location_mask = workers_locations_df["work_block_id"] == "-1"
+    workers_no_location = ((workers_locations_df["worker"] == 1) & no_location_mask).sum()
+    persons_no_location = no_location_mask.sum()
 
-    # Calculate and print the shares
-    share_workers_no_location = (
-        workers_no_location / total_workers if total_workers else 0
-    )
-    share_persons_no_location = (
-        persons_no_location / total_persons if total_persons else 0
-    )
-    print("Share of workers with no work location:", share_workers_no_location)
-    print("Share of people with no work location:", share_persons_no_location)
+    # Calculate the shares
+    share_workers_no_location = workers_no_location / total_workers if total_workers else 0
+    share_persons_no_location = persons_no_location / total_persons if total_persons else 0
+
+    # Print the results
+    print(f"Share of workers with no work location: {share_workers_no_location:.4f}")
+    print(f"Share of people with no work location: {share_persons_no_location:.4f}")
 
 
 # -----------------------------------------------------------------------------------------
@@ -1403,14 +1362,14 @@ if orca.get_injectable("running_calibration_routine") == False:
         steps_all_years = (
             add_variables +
             start_of_year_models
-            + demo_models
-            # + work_models
+            # + demo_models
+            + work_models
             # + school_models
             # + price_models
             # + developer_models
             # + household_models
             # + employment_models
-            + end_of_year_models
+            # + end_of_year_models
             # + mlcm_postprocessing
             + export_demo_steps
         )
