@@ -1806,8 +1806,8 @@ def require_asim_skims(func):
 def ASC():
     return 1
 
-@orca.column('travel_data', cache=True)
 @require_asim_skims
+@orca.column('travel_data', cache=True)
 def tour_sov_in_vehicle_time(travel_data, asim_skims):
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
@@ -1823,8 +1823,8 @@ def tour_sov_in_vehicle_time(travel_data, asim_skims):
 
     return (value_outbound + value_inbound).apply(np.log1p)
 
-@orca.column('travel_data', cache=True)
 @require_asim_skims
+@orca.column('travel_data', cache=True)
 def tour_dist(travel_data, asim_skims):
 
     ods = travel_data.to_frame(columns = ['']).reset_index()
@@ -1848,8 +1848,8 @@ def tour_sov_operating_cost(travel_data, cost_per_mile, avg_parking_cost):
     return (s).apply(np.log1p)
 
 
-@orca.column('travel_data', cache=True)
 @require_asim_skims
+@orca.column('travel_data', cache=True)
 def tour_bus_in_vehicle_time(travel_data, asim_skims, transit_change):
 
     ods = travel_data.to_frame(columns = ['']).reset_index()
@@ -1864,8 +1864,8 @@ def tour_bus_in_vehicle_time(travel_data, asim_skims, transit_change):
 
     return (value_outbound + value_inbound).apply(np.log1p).replace(0, 20.0) #Replace high high time to make transit very unactrative
 
-@orca.column('travel_data', cache=True)
 @require_asim_skims
+@orca.column('travel_data', cache=True)
 def tour_bus_fare(travel_data, asim_skims):
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
@@ -1879,8 +1879,8 @@ def tour_bus_fare(travel_data, asim_skims):
 
     return (value_outbound + value_inbound).apply(np.log1p).replace(0, 20.0)
 
-@orca.column('travel_data', cache=True)
 @require_asim_skims
+@orca.column('travel_data', cache=True)
 def tour_train_in_vehicle_time(travel_data, asim_skims, transit_change):
 
     ods = travel_data.to_frame(columns = ['']).reset_index()
@@ -1895,8 +1895,8 @@ def tour_train_in_vehicle_time(travel_data, asim_skims, transit_change):
 
     return (value_outbound + value_inbound).apply(np.log1p).replace(0, 20.0) #Replace high high time to make transit very unactrative
 
-@orca.column('travel_data', cache=True)
 @require_asim_skims
+@orca.column('travel_data', cache=True)
 def tour_train_fare(travel_data, asim_skims):
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
@@ -1910,8 +1910,8 @@ def tour_train_fare(travel_data, asim_skims):
 
     return (value_outbound + value_inbound).apply(np.log1p).replace(0, 20.0)
 
-@orca.column('travel_data', cache=True) 
 @require_asim_skims
+@orca.column('travel_data', cache=True)
 def walk_time_up_to_2_miles(travel_data, asim_skims, walkThresh, walkSpeed):
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
@@ -1925,8 +1925,8 @@ def walk_time_up_to_2_miles(travel_data, asim_skims, walkThresh, walkSpeed):
 
     return ((value_outbound + value_inbound) * 60/walkSpeed).apply(np.log1p)
 
-@orca.column('travel_data', cache=True)
 @require_asim_skims
+@orca.column('travel_data', cache=True)
 def walk_time_beyond_2_of_a_miles(travel_data, asim_skims, walkThresh, walkSpeed):
 
     ods = travel_data.to_frame(columns = ['']).reset_index()
@@ -1943,8 +1943,8 @@ def walk_time_beyond_2_of_a_miles(travel_data, asim_skims, walkThresh, walkSpeed
 
     return ((value_outbound + value_inbound) * 60/walkSpeed).apply(np.log1p)
 
-@orca.column('travel_data', cache=True)
 @require_asim_skims
+@orca.column('travel_data', cache=True)
 def bike_time_up_to_6_miles(travel_data, asim_skims, bikeThresh, bikeSpeed):
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
@@ -1958,8 +1958,8 @@ def bike_time_up_to_6_miles(travel_data, asim_skims, bikeThresh, bikeSpeed):
 
     return ((value_outbound + value_inbound) * 60/bikeSpeed).apply(np.log1p)
 
-@orca.column('travel_data', cache=True)
 @require_asim_skims
+@orca.column('travel_data', cache=True)
 def bike_time_beyond_6_of_a_miles(travel_data, asim_skims, bikeThresh, bikeSpeed):
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
@@ -1975,8 +1975,8 @@ def bike_time_beyond_6_of_a_miles(travel_data, asim_skims, bikeThresh, bikeSpeed
 
     return ((value_outbound + value_inbound) * 60/bikeSpeed).apply(np.log1p)
 
-@orca.column('travel_data', cache=True)
 @require_asim_skims
+@orca.column('travel_data', cache=True)
 def outbound_dist(travel_data, asim_skims):
 
     ods = travel_data.to_frame(columns = ['']).reset_index()
@@ -1987,8 +1987,8 @@ def outbound_dist(travel_data, asim_skims):
 
     return value_outbound
 
-@orca.column('travel_data', cache=True)
 @require_asim_skims
+@orca.column('travel_data', cache=True)
 def inbound_dist(travel_data, asim_skims):
 
     ods = travel_data.to_frame(columns = ['']).reset_index()
@@ -1999,8 +1999,8 @@ def inbound_dist(travel_data, asim_skims):
 
     return value_inbound
 
-@orca.column('travel_data', cache=True)
 @require_asim_skims
+@orca.column('travel_data', cache=True)
 def tour_tnc_cost(travel_data, asim_skims, tnc_baseline, tnc_cost_minute, tnc_cost_mile, tnc_min_fare):
     ods = travel_data.to_frame(columns = ['outbound_dist', 'inbound_dist']).reset_index()
 
@@ -2020,8 +2020,8 @@ def tour_tnc_cost(travel_data, asim_skims, tnc_baseline, tnc_cost_minute, tnc_co
 
     return (cost_outbound + cost_inbound).apply(np.log1p)
 
-@orca.column('travel_data', cache=True)
 @require_asim_skims
+@orca.column('travel_data', cache=True)
 def tour_tnc_wait_time(travel_data, asim_skims):
     ods = travel_data.to_frame(columns = ['']).reset_index()
 
