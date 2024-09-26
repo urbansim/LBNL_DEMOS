@@ -75,7 +75,7 @@ def update_education_status(persons_df, student_list, year):
 
     return persons_df
 
-def extract_students(persons):
+def extract_students(persons_df):
     """
     Extract students from the persons DataFrame.
 
@@ -91,13 +91,13 @@ def extract_students(persons):
         pd.DataFrame: A DataFrame of students with additional columns indicating their 
                       school level (elementary, middle, or high).
     """
+    breakpoint()
     edu_levels = np.arange(3, 16).astype(float)
-    STUDENTS_CONDITION = (persons["student"]==1) & (persons["edu"].isin(edu_levels))
-    students_df = persons[STUDENTS_CONDITION].copy()
-    students_df["STUDENT_SCHOOL_LEVEL"] = np.where(
-        students_df["edu"]<=8, "ELEMENTARY",
-        np.where(students_df["edu"]<=11, "MIDDLE", "HIGH"))
+    STUDENTS_CONDITION = (persons_df["student"]==1) & (persons_df["edu"].isin(edu_levels))
+    students_df = persons_df[STUDENTS_CONDITION].copy()
+    students_df["student_school_level"] = np.where(students_df["edu"]<=8, "ELEMENTARY", np.where(students_df["edu"]<=11, "MIDDLE", "HIGH"))
     students_df = students_df.reset_index()
+    breakpoint()
     return students_df
 
 def create_student_groups(students_df):
@@ -110,12 +110,19 @@ def create_student_groups(students_df):
     Returns:
         DataFrame: grouped students by household and grade level
     """
-    students_df = students_df[students_df["DET_DIST_TYPE"]==students_df["STUDENT_SCHOOL_LEVEL"]].reset_index(drop=True)
-    student_groups = students_df.groupby(['household_id', 'GEOID10_SD', 'STUDENT_SCHOOL_LEVEL'])['person_id'].apply(list).reset_index(name='students')
-    student_groups["DISTRICT_LEVEL"] = student_groups.apply(lambda row: (row['GEOID10_SD'], row['STUDENT_SCHOOL_LEVEL']), axis=1)
+    # breakpoint()
+    students_df = students_df[students_df["school_level"]==students_df["student_school_level"]].reset_index(drop=True)
+    # breakpoint()
+    student_groups = students_df.groupby(['household_id', 'district_id', 'student_school_level'])['person_id'].apply(list).reset_index(name='students')
+    # breakpoint()
+    student_groups["district_level"] = student_groups.apply(lambda row: (row['district_id'], row['student_school_level']), axis=1)
+    # breakpoint()
     student_groups["size_student_group"] = [len(x) for x in student_groups["students"]]
-    student_groups = student_groups.sort_values(by=["GEOID10_SD", "STUDENT_SCHOOL_LEVEL"]).reset_index(drop=True)
-    student_groups["CUM_STUDENTS"] = student_groups.groupby(["GEOID10_SD", "STUDENT_SCHOOL_LEVEL"])["size_student_group"].cumsum()
+    # breakpoint()
+    student_groups = student_groups.sort_values(by=["district_id", "student_school_level"]).reset_index(drop=True)
+    # breakpoint()
+    student_groups["cumulative_students"] = student_groups.groupby(["district_id", "student_school_level"])["size_student_group"].cumsum()
+    # breakpoint()
     return student_groups
 
 def assign_schools(student_groups, blocks_districts, schools_df):
@@ -131,28 +138,43 @@ def assign_schools(student_groups, blocks_districts, schools_df):
         list: list of assigned students
     """
     assigned_students_list = []
-    for tuple in blocks_districts["DISTRICT_LEVEL"].unique():
+    # breakpoint()
+    for tuple in blocks_districts["district_level"].unique():
+        # breakpoint()
         SCHOOL_DISTRICT = tuple[0]
         SCHOOL_LEVEL = tuple[1]
-        schools_pool = schools_df[(schools_df["SCHOOL_LEVEL"]==SCHOOL_LEVEL) &\
-                                (schools_df["GEOID10_SD"]==SCHOOL_DISTRICT)].copy()
-        student_pool = student_groups[(student_groups["STUDENT_SCHOOL_LEVEL"]==SCHOOL_LEVEL) &\
-                        (student_groups["GEOID10_SD"]==SCHOOL_DISTRICT)].copy()
+        # breakpoint()
+        schools_pool = schools_df[(schools_df["school_level"]==SCHOOL_LEVEL) &\
+                                (schools_df["distict_id"]==SCHOOL_DISTRICT)].copy()
+        # breakpoint()
+        student_pool = student_groups[(student_groups["student_school_level"]==SCHOOL_LEVEL) &\
+                        (student_groups["distict_id"]==SCHOOL_DISTRICT)].copy()
+        # breakpoint()
         student_pool = student_pool.sample(frac = 1)
+        # breakpoint()
         # Iterate over schools_df
         for idx, row in schools_pool.iterrows():
             # Get the pool of students for the district and level of the school
-            SCHOOL_LEVEL = row["SCHOOL_LEVEL"]
-            SCHOOL_DISTRICT = row["GEOID10_SD"]
+            # breakpoint()
+            SCHOOL_LEVEL = row["school_level"]
+            SCHOOL_DISTRICT = row["distict_id"]
             # Calculate the number of students to assign
+            # breakpoint()
             n_students = min(student_pool["size_student_group"].sum(), row['CAP_TOTAL'])
-            student_pool["CUM_STUDENTS"] = student_pool["size_student_group"].cumsum()
-            student_pool["ASSIGNED"] = np.where(student_pool["CUM_STUDENTS"]<=n_students, 1, 0)
+            # breakpoint()
+            student_pool["cumulative_students"] = student_pool["size_student_group"].cumsum()
+            # breakpoint()
+            student_pool["assigned"] = np.where(student_pool["cumulative_students"]<=n_students, 1, 0)
+            # breakpoint()
             # Randomly sample students without replacement
-            assigned_students = student_pool[student_pool["CUM_STUDENTS"]<=n_students].copy()
-            assigned_students["SCHOOL_ID"] = row["SCHOOL_ID"]
+            assigned_students = student_pool[student_pool["cumulative_students"]<=n_students].copy()
+            # breakpoint()
+            assigned_students["school_id"] = row["school_id"]
+            # breakpoint()
             assigned_students_list.append(assigned_students)
-            student_pool = student_pool[student_pool["ASSIGNED"]==0].copy()
+            # breakpoint()
+            student_pool = student_pool[student_pool["assigned"]==0].copy()
+            # breakpoint()
     return assigned_students_list
 
 def create_results_table(students_df, assigned_students_list, year):
@@ -173,9 +195,9 @@ def create_results_table(students_df, assigned_students_list, year):
         pd.DataFrame: A DataFrame containing the results of student assignments, including 
                       student IDs, school IDs, and the year of assignment.
     """
-    assigned_students_df = pd.concat(assigned_students_list)[["students", "household_id", "GEOID10_SD", "STUDENT_SCHOOL_LEVEL", "SCHOOL_ID"]]
+    assigned_students_df = pd.concat(assigned_students_list)[["students", "household_id", "district_id", "student_school_level", "school_id"]]
     assigned_students_df = assigned_students_df.explode("students").rename(columns={"students": "person_id",
-                                                                                    "SCHOOL_ID": "school_id",})
-    school_assignment_df = students_df[["person_id"]].merge(assigned_students_df[["person_id", "school_id", "GEOID10_SD"]], on="person_id", how='left').fillna("-1")
+                                                                                    "school_id": "school_id",})
+    school_assignment_df = students_df[["person_id"]].merge(assigned_students_df[["person_id", "school_id", "district_id"]], on="person_id", how='left').fillna("-1")
     school_assignment_df["year"] = year
     return school_assignment_df

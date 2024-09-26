@@ -1,7 +1,7 @@
 import numpy as np
 import orca
 import pandas as pd
-from demos_urbansim.demos_utils.utils import aggregate_household_data
+from demos_utils.utils import aggregate_household_data
 
 def remove_deceased_houseolds(persons_df, households_df):
     """

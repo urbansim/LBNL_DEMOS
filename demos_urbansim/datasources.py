@@ -83,15 +83,15 @@ print(data_name)
 def load_calibration_data(region_code):
     print("Loading calibration data for region:", region_code)
     calibration_files = {
-        "hsize_ct": ("data/hsize_ct_{}.csv", {"lcm_county_id": object, "year": int, "hh_size": object, "total_number_of_households": float}),
-        "income_rates": ("data/income_growth_rates_{}.csv", {"lcm_county_id": object, "year": int, "rate": float}),
+        "hsize_ct": ("data/calibration_data/hsize_ct_obs_{}.csv", {"lcm_county_id": object, "year": int, "hh_size": object, "total_number_of_households": float}),
+        "income_rates": ("data/calibration_data/income_growth_rates_{}.csv", {"lcm_county_id": object, "year": int, "rate": float}),
         "rel_map": ("data/relmap_{}.csv", None),
-        "observed_births_data": ("data/births_over_time_obs_{}.csv", {"year": int, "count": float}),
-        "observed_fatalities_data": ("data/mortalities_over_time_obs_{}.csv", {"year": int, "count": float}),
-        "observed_marrital_data": ("data/marrital_status_over_time_obs_{}.csv", {"year": int, "MAR": int, "count": float}),
-        "observed_entering_workforce": ("data/entering_workforce_obs_{}.csv", {"year": int, "share": float}),
-        "observed_exiting_workforce": ("data/exiting_workforce_obs_{}.csv", {"year": int, "share": float}),
-        "observed_enrollment_data": ("data/enrollment_over_time_obs_{}.csv", {"year": int, "count": float}),
+        "observed_births_data": ("data/calibration_data/births_over_time_obs_{}.csv", {"year": int, "count": float}),
+        "observed_fatalities_data": ("data/calibration_data/mortalities_over_time_obs_{}.csv", {"year": int, "count": float}),
+        "observed_marrital_data": ("data/calibration_data/marrital_status_over_time_obs_{}.csv", {"year": int, "MAR": int, "count": float}),
+        "observed_entering_workforce": ("data/calibration_data/entering_workforce_obs_{}.csv", {"year": int, "share": float}),
+        "observed_exiting_workforce": ("data/calibration_data/exiting_workforce_obs_{}.csv", {"year": int, "share": float}),
+        "observed_enrollment_data": ("data/calibration_data/enrollment_over_time_obs_{}.csv", {"year": int, "count": float}),
     }
 
     for table_name, (file_pattern, dtype) in calibration_files.items():
@@ -156,6 +156,7 @@ hdf_tables = [
     "student_school_assignment",
     "work_locations",
 ]
+
 mlcm_tables = {
     "student_school_assignment": ["person_id", "school_id"],
     "work_locations": ["person_id", "work_block_id"],
@@ -167,8 +168,11 @@ for t, c in mlcm_tables.items():
 
 
 store = pd.HDFStore(hdf_path)
-if "/metadata" in store.keys():
-    hdf_tables += ["metadata"]
+optional_tables = ["/metadata", "/blocks_districts", "/schools"]
+for table in optional_tables:
+    if table in store.keys():
+        hdf_tables += [table]
+
 store.close()
 
 for table_name in hdf_tables:
@@ -474,7 +478,7 @@ def load_activitysim_skims(region_code):
     Returns:
     bool: True if the skims data was successfully loaded, False otherwise.
     """
-    skims_file = f"data/skims_mpo_{region_code}.omx"
+    skims_file = f"data/asim_skims/skims_mpo_{region_code}.omx"
     if os.path.exists(skims_file):
         try:
             skims = omx.open_file(skims_file, "r")
@@ -555,7 +559,7 @@ def update_travel_data(travel_data):
 # ADD DEMOS TABLES
 # -----------------------------------------------------------------------------------------
 
-demos_tables = [
+demos_export_tables = [
     "graveyard",
     "pop_over_time",
     "ho_over_time",
@@ -590,7 +594,7 @@ demos_tables = [
     "work_locations",
 ]
 
-for table in demos_tables:
+for table in demos_export_tables:
     orca.add_table(table, pd.DataFrame())
 
 # Add injectables of persons and households local columns
@@ -602,31 +606,45 @@ orca.add_injectable("households_local_cols", orca.get_table("households").local.
 # ------------------------------------------------------------
 # Data needed for school location choice models
 geoid_to_zone = pd.read_csv(
-    "data/geoid_to_zone.csv", dtype={"GEOID": str, "zone_id": str}
+    f"data/school_data/geoid_to_zone_{region_code}.csv",
+    dtype={"block_id": str, "zone_id": str}
 )
-geoid_to_zone["GEOID10"] = geoid_to_zone["GEOID"].copy()
-blocks_districts = pd.read_csv("data/blocks_school_districts_2010.csv")
-blocks_districts["UNIFIED_DISTRICT"] = np.where(
-    blocks_districts["SCHOOL_DIST_TYPE"] == "UNIFIED", 1, 0
-)
-blocks_districts["GEOID10"] = ["0" + str(x) for x in blocks_districts["GEOID10_BLOCK"]]
-blocks_districts["GEOID10_SD"] = ["0" + str(x) for x in blocks_districts["GEOID10_SD"]]
-blocks_districts["DISTRICT_LEVEL"] = blocks_districts.apply(
-    lambda row: (row["GEOID10_SD"], row["DET_DIST_TYPE"]), axis=1
-)
-blocks_districts = blocks_districts.merge(geoid_to_zone, how="left", on=["GEOID10"])
-blocks_districts = blocks_districts.rename(columns={"zone_id": "school_taz"})
-blocks_districts["school_block_id"] = blocks_districts["GEOID10"].copy()
-
 schools_df = pd.read_csv(
-    "data/schools_2010.csv", dtype={"GEOID10": str, "SCHOOL_ID": str}
+    f"data/school_data/schools_2010_{region_code}.csv",
+    dtype={"GEOID10": str, "SCHOOL_ID": str}
 )
+blocks_districts = pd.read_csv(
+    f"data/school_data/blocks_school_districts_2010_{region_code}.csv",
+    dtype={"block_id": str, "district_id": str}
+)
+geoid_to_zone["block_id"] = geoid_to_zone["block_id"].copy()
+
+blocks_districts["unified_district"] = np.where(
+    blocks_districts["district_type"] == "UNIFIED", 1, 0
+)
+blocks_districts["district_by_school_level"] = blocks_districts.apply(
+    lambda row: (row["district_id"], row["school_level"]), axis=1
+)
+# breakpoint()
+blocks_districts = blocks_districts.merge(geoid_to_zone, how="left", on=["block_id"])
+# breakpoint()
+blocks_districts = blocks_districts.rename(columns={"zone_id": "school_taz"})
+# breakpoint()
+blocks_districts["school_block_id"] = blocks_districts["block_id"].copy()
+# breakpoint()
+
 schools_df["CAP_TOTAL_INC"] = schools_df["CAP_TOTAL"] * 1.2
+# breakpoint()
 schools_df["REM_CAP"] = schools_df["CAP_TOTAL_INC"]
-schools_df["GEOID10"] = ["0" + str(x) for x in schools_df["GEOID10"]]
-schools_df["GEOID10_SD"] = ["0" + str(x) for x in schools_df["NCESDist"]]
+# breakpoint()
+schools_df["block_id"] = ["0" + str(x) for x in schools_df["GEOID10"]]
+# breakpoint()
+schools_df["district_id"] = ["0" + str(x) for x in schools_df["NCESDist"]]
+# breakpoint()
 schools_df["school_id"] = schools_df["SCHOOL_ID"].copy()
+# breakpoint()
 schools_df = schools_df[~(schools_df["school_id"] == "0000000")].copy()
+# breakpoint()
 
 orca.add_table("blocks_districts", blocks_districts)
 orca.add_table("geoid_to_zone", geoid_to_zone)

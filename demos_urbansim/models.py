@@ -1,6 +1,7 @@
 import os
 import warnings
 from operator import index
+
 warnings.filterwarnings("ignore")
 
 import indicators
@@ -8,59 +9,59 @@ import numpy as np
 import orca
 import pandana as pdna
 import pandas as pd
-from google.cloud import storage
-from scipy.spatial.distance import cdist
-from urbansim.developer import developer
-from demos_urbansim.demos_utils.education_utils import (
-    update_education_status,
-    extract_students,
-    create_student_groups,
-    assign_schools,
-    create_results_table,
+from demos_utils.birth_utils import (
+    get_birth_eligible_households,
+    update_birth,
+    update_birth_eligibility_count_table,
+    update_births_predictions_table,
 )
-from demos_urbansim.demos_utils.household_reorg_utils import (
-    update_divorce,
-    update_divorce_predictions,
-    print_household_stats,
-    get_divorce_eligible_household_ids,
-)
-from demos_urbansim.demos_utils.single_to_x_utils import (
-    update_married_households,
-    update_married_predictions,
-    get_marriage_eligible_persons,
-    update_marrital_status_stats,
-)
-from demos_urbansim.demos_utils.cohabitation_to_x_utils import (
-    process_cohabitation_to_marriage,
+from demos_utils.cohabitation_to_x_utils import (
     get_cohabitation_to_x_eligible_households,
+    process_cohabitation_to_marriage,
     update_cohabitating_households,
 )
-from demos_urbansim.demos_utils.kids_move_utils import (
+from demos_utils.education_utils import (
+    assign_schools,
+    create_results_table,
+    create_student_groups,
+    extract_students,
+    update_education_status,
+)
+from demos_utils.household_reorg_utils import (
+    get_divorce_eligible_household_ids,
+    print_household_stats,
+    update_divorce,
+    update_divorce_predictions,
+)
+from demos_utils.income_utils import update_income
+from demos_utils.kids_move_utils import (
     update_households_after_kids,
     update_kids_moving_table,
 )
-from demos_urbansim.demos_utils.simulation_utils import simulation_mnl, calibrate_model
-from demos_urbansim.demos_utils.birth_utils import (
-    update_birth,
-    get_birth_eligible_households,
-    update_births_predictions_table,
-    update_birth_eligibility_count_table,
-)
-from demos_urbansim.demos_utils.laborforce_utils import (
-    fetch_observed_labor_force_entries_exits,
-    update_workforce_stats_tables,
+from demos_utils.laborforce_utils import (
     aggregate_household_labor_variables,
+    fetch_observed_labor_force_entries_exits,
     sample_income,
     update_labor_status,
+    update_workforce_stats_tables,
 )
-from demos_urbansim.demos_utils.utils import (
-    update_metadata,
-    export_demo_table,
-    deduplicate_updated_households,
+from demos_utils.mortality_model_utils import *
+from demos_utils.simulation_utils import calibrate_model, simulation_mnl
+from demos_utils.single_to_x_utils import (
+    get_marriage_eligible_persons,
+    update_married_households,
+    update_married_predictions,
+    update_marrital_status_stats,
+)
+from demos_utils.utils import (
     deduplicate_multihead_households,
+    deduplicate_updated_households,
+    export_demo_table,
+    update_metadata,
 )
-from demos_urbansim.demos_utils.mortality_model_utils import *
-from demos_urbansim.demos_utils.income_utils import update_income
+from google.cloud import storage
+from scipy.spatial.distance import cdist
+from urbansim.developer import developer
 
 # import demo_models
 from urbansim.models import GrowthRateTransition, transition
@@ -624,30 +625,33 @@ def school_location(persons, households, year):
     persons_df = orca.get_table("persons").local
     schools_df = orca.get_table("schools").to_frame()
     blocks_districts = orca.get_table("blocks_districts").to_frame()
-    households_df = orca.get_table("households").local
-    households_df = households_df.reset_index()
+    households_df = orca.get_table("households").to_frame(columns=["block_id"]).reset_index()
+    
     # Pre-processing, matching households to districts
-    households_districts = households_df[["household_id", "block_id"]].merge(
-        blocks_districts, left_on="block_id", right_on="GEOID10"
-    )
+    households_districts = households_df[["household_id", "block_id"]].merge(blocks_districts, on="block_id")
+    
     # Extracting students
     students_df = extract_students(persons_df)
+    
     students_df = students_df.merge(
         households_districts.reset_index(), on="household_id"
     )
+    
     # Keeping only students with districts of their levels.
     students_df = students_df[
-        students_df["STUDENT_SCHOOL_LEVEL"] == students_df["DET_DIST_TYPE"]
+        students_df["student_school_level"] == students_df["school_level"]
     ].copy()
-
+    
     student_groups = create_student_groups(students_df)
+    
     assigned_students_list = assign_schools(
         student_groups, blocks_districts, schools_df
     )
-
+    
     school_assignment_df = create_results_table(
         students_df, assigned_students_list, year
     )
+    
     # Adding tables
     orca.add_table(
         "student_school_assignment", school_assignment_df[["person_id", "school_id"]]
@@ -1357,17 +1361,20 @@ if orca.get_injectable("running_calibration_routine") == False:
         school_models = ["school_location"]
         end_of_year_models = ["generate_outputs"]
         work_models = ["work_location"]
-        income_model = ["income_model"]
+        income_models = ["income_model"]
+        in_out_migration = ["household_transition"]
         steps_all_years = (
             add_variables +
             start_of_year_models
             + demo_models
+            + in_out_migration
             + work_models
             + school_models
             + price_models
             + developer_models
             + household_models
             + employment_models
+            + income_models
             + end_of_year_models
             + export_demo_steps
         )
