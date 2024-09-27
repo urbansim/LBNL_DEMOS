@@ -1343,7 +1343,7 @@ if orca.get_injectable("running_calibration_routine") == False:
         add_variables = ["add_temp_variables"]
         start_of_year_models = ["status_report"]
         demo_models = [
-            "aging",
+            # "aging",
             "laborforce_participation",
             "households_reorg",
             "kids_moving",
@@ -1364,15 +1364,15 @@ if orca.get_injectable("running_calibration_routine") == False:
         income_models = ["income_model"]
         in_out_migration = ["household_transition"]
         steps_all_years = (
-            add_variables +
-            start_of_year_models
+            add_variables
+            + start_of_year_models
             + demo_models
             + in_out_migration
             + work_models
             + school_models
-            + price_models
-            + developer_models
-            + household_models
+            # + price_models
+            # + developer_models
+            # + household_models
             + employment_models
             + income_models
             + end_of_year_models

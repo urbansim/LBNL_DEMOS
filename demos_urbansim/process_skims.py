@@ -58,9 +58,3 @@ store['jobs'] = jobs
 store['residential_units'] = units
 store.close()
 print("Done!")
-
-
-
-
-
-
