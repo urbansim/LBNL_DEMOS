@@ -15,31 +15,6 @@ from urbansim_templates.models import LargeMultinomialLogitStep, OLSRegressionSt
 print("importing datasources")
 
 # -----------------------------------------------------------------------------------------
-# UC SIMULATIONS: ADDS SPECIAL SCENARIO INJECTABLES FROM NOTES
-# -----------------------------------------------------------------------------------------
-scenario_data = glob.glob("./data/scenario_data*")
-if len(scenario_data) > 0:
-    with open(scenario_data[0]) as f:
-        scenario = yaml.load(f, Loader=yaml.FullLoader)
-    if scenario["notes"] is not None and scenario["notes"] != "":
-        print("Extracting relevant information from scenario notes")
-        settings = eval(scenario["notes"])["settings"]
-        if "calibrated_folder" in settings.keys():
-            orca.add_injectable("calibrated_folder", settings["calibrated_folder"])
-        if "initial_run" in settings.keys():
-            orca.add_injectable("initial_run", eval(settings["initial_run"]))
-        if "multi_level_lcms" in settings.keys():
-            orca.add_injectable("multi_level_lcms", eval(settings["multi_level_lcms"]))
-        if "segmented_lcms" in settings.keys():
-            orca.add_injectable("segmented_lcms", eval(settings["segmented_lcms"]))
-        if "capacity_boost" in settings.keys():
-            orca.add_injectable("capacity_boost", settings["capacity_boost"])
-        if "database_control_totals" in settings.keys():
-            orca.add_injectable(
-                "use_database_control_totals", eval(settings["database_control_totals"])
-            )
-
-# -----------------------------------------------------------------------------------------
 # DOWNLOADS DATA FOR REGION
 # -----------------------------------------------------------------------------------------
 all_local = orca.get_injectable("all_local")
