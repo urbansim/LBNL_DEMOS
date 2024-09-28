@@ -12,16 +12,15 @@ from urbansim_templates.models import LargeMultinomialLogitStep, OLSRegressionSt
 
 def run(
         region_code, initial_run, base_year, forecast_year, random_seed,
-        calibrated, calibrated_folder, multi_level, segmented, capacity_boost,
+        multi_level, segmented, capacity_boost,
         all_local, freq_interval, output_fname, skim_source, random_match, table_save, scenario_name):
-    orca.add_injectable('running_calibration_routine', False)
     orca.add_injectable('local_simulation', True)
     orca.add_injectable('initial_run', initial_run)
     orca.add_injectable('region_code', region_code)
     orca.add_injectable('base_year', base_year)
     orca.add_injectable('forecast_year', forecast_year)
-    orca.add_injectable('calibrated', calibrated)
-    orca.add_injectable('calibrated_folder', calibrated_folder)
+    # orca.add_injectable('calibrated', calibrated)
+    # orca.add_injectable('calibrated_folder', calibrated_folder)
     orca.add_injectable('multi_level_lcms', multi_level)
     orca.add_injectable('segmented_lcms', segmented)
     orca.add_injectable('capacity_boost', capacity_boost)
@@ -38,12 +37,8 @@ def run(
     if random_seed:
         np.random.seed(random_seed)
 
-    calibrated_path = os.path.join(
-        'calibrated_configs/', calibrated_folder, region_code)
-    if os.path.exists(os.path.join('configs', calibrated_path, skim_source)):
-        calibrated_path = os.path.join(calibrated_path, skim_source)
-    configs_folder = calibrated_path if orca.get_injectable('calibrated') else 'estimated_configs'
-    mm.initialize('configs/' + configs_folder)
+    configs_folder = os.path.join('configs', region_code)
+    mm.initialize(configs_folder)
     orca.run(orca.get_injectable('pre_processing_steps'))
 
 
@@ -91,9 +86,6 @@ if __name__ == '__main__':
     forecast_year = args.year if args.year else 2020
     freq_interval = args.freq_interval if args.freq_interval else 1
     random_seed = args.random_seed if args.random_seed else False
-    calibrated = args.calibrated if args.calibrated else False
-    calibrated_folder = args.calibrated_folder if args.calibrated_folder \
-        else 'multilevel_segmented_grouped_controls_200iters_0.05step'
     multi_level = False if args.single_level_lcms else True
     segmented = True if args.segmented else False
     capacity_boost = args.capacity_boost if args.capacity_boost else 1
@@ -107,7 +99,7 @@ if __name__ == '__main__':
 
     run(
         region_code, initial_run, base_year, forecast_year, random_seed,
-        calibrated, calibrated_folder, multi_level, segmented, capacity_boost,
+        multi_level, segmented, capacity_boost,
         all_local, freq_interval, output_fname, skim_source, random_match, table_save, scenario_name)
 
     # make sure output data has same permissions as input (only an
