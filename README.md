@@ -70,19 +70,49 @@ The `simulate.py` file is the main entry point for running simulations. It handl
 
 
 ## data folder
-The data folder should contain the following files:
+The data folder is structured as follows:
+```
+data/
+├── custom_mpo_{region_code}_model_data.h5
+├── relmap_{region_code}.csv
+├── calibration_data/
+│   ├── income_growth_rates_{region_code}.csv
+│   ├── births_over_time_obs_{region_code}.csv
+│   ├── mortalities_over_time_obs_{region_code}.csv
+│   ├── hsizec_ct_{region_code}.csv
+│   ├── divorces_over_time_obs_{region_code}.csv
+│   ├── enrollment_over_time_obs_{region_code}.csv
+│   ├── gender_over_time_obs_{region_code}.csv
+│   ├── marrital_status_over_time_obs_{region_code}.csv
+│   ├── pop_over_time_obs_{region_code}.csv
+│   ├── households_over_time_obs_{region_code}.csv
+│   ├── marriages_over_time_obs_{region_code}.csv
+│   └── income_growth_rates_{region_code}.csv
+├── asim_skims/
+│   └── skims_mpo_{region_code}.omx
+└── school_data/
+    ├── blocks_school_districts_{base_year}_{region_code}.csv
+    ├── schools_{base_year}_{region_code}.csv
+    └── geoid_to_zone_{region_code}.csv
+
+```
 - `custom_mpo_{region_code}_model_data.h5`: This file contains the model data for the region. It is a HDF5 file that contains the following tables:
   - `households`: This table contains the household data.
   - `persons`: This table contains the person data.
   - `blocks`: This table contains the block data.
   - `jobs`: This table contains the job data.
   - `schools`: This table contains the school data.
+- `rel_map_{region_code}.csv`: This file contains the household role mapping structure after mortality model
 
+The data folder also contains the following subfolders:
+
+## calibration_data subfolder
+
+The `calibration_data` subfolder within the data folder contains files and scripts used for calibrating the DEMOS models. This includes files with historical and forecast controls used for calibrating the ASC of the DEMOS models:
 - `income_growth_rates_{region_code}.csv`: This file contains the income growth rates for the region.
 - `births_over_time_obs_{region_code}.csv`: This file contains the observed births over time for the region.
 - `mortalities_over_time_obs_{region_code}.csv`: This file contains the observed mortalities over time for the region.
 - `hsizec_ct_{region_code}.csv`: This file contains the observed household size distribution for the region.
-- `rel_map.csv`: This file contains the relationship mapping structure after mortality model
 - `divorces_over_time_obs_{region_code}.csv`: This file contains the observed divorces over time for the region.
 - `enrollment_over_time_obs_{region_code}.csv`: This file contains the observed enrollment over time for the region.
 - `gender_over_time_obs_{region_code}.csv`: This file contains the observed gender distribution over time for the region.
@@ -91,12 +121,26 @@ The data folder should contain the following files:
 - `households_over_time_obs_{region_code}.csv`: This file contains the observed household distribution over time for the region.
 - `marriages_over_time_obs_{region_code}.csv`: This file contains the observed marriages over time for the region.
 
+This subfolder is crucial for ensuring the models accurately reflect real-world demographic trends and behaviors specific to the region being modeled.
+
+## asim_skims subfolder
+
+The `asim_skims` subfolder within the data folder contains skims data used in any models depending on accessibility variables (e.g.: mandatory location choice models). Data is in `.omx` format. Note that none of the DEMOS model requires the use of the skims data, so these files could be ignored if only DEMOS models are being run.
+
+## school_data subfolder
+
+The `school_data` subfolder within the data folder contains data relevant the the school location assignment step. This data includes:
+ - `blocks_school_districts_{base_year}_{region_code}.csv`: This file contains the block-to-school district matching for the region.
+ - `schools_{base_year}_{region_code}.csv`: This file contains the school data for the region, including school enrollment capacities.
+ - `geoid_to_zone_{region_code}.csv`: This file contains the block-to-taz matching for the region, helpful for assigning school TAZ indicator.
+
+This data is used in education-related models, such as school enrollment predictions and household location choices based on school proximity and quality within the modeled region.
+
 ## configs folder
 
 
 The `configs` folder is a crucial component of the simulation framework, primarily housing the model specifications that define the type, structure, and parameters of various models used in the simulation. These specifications are located in YAML files, each corresponding to a specific model (e.g., `birth_model.yaml` for the birth model), and they outline the variables, coefficients, and other parameters that the models utilize during execution. These model specifications are based on `urbansim-templates`. For more details on the meaning and definition of parameters in the model specifications configs, please refer to the `urbansim-templates`[https://github.com/UDST/urbansim_templates] documentation.
 The variable naming conventions in the model specifications must align with the variable definitions specified in `variables.py`.
-
 
 These files are located in region-specific subfolders within the `custom` folder, defined by the region FIPS code (e.g., `06197001` for the San Francisco Bay Area).
 The DEMOS models specifications files are the following:
@@ -124,69 +168,33 @@ Other models that are needed in simulation but are not part of DEMOS model suite
 This repository contains only code and configuration/setup files necessary
 
 
-
-
-1. Clone this repository into your local machine
-
-
-2. Create Environment
-
-
-
-
-3. Run the local setup
-
-
-```
-python3 setup.py develop
-```
-
-
-4. Install Anaconda
+1. Install Anaconda
 It is recommended to create a new development environment to isolate the environment for this software from all other installed environments. This is to avoid creating any conflicts with already installed libraries or software. The recommended way to install environments is through Anaconda. Follow this guide to create a new environment and install the dependencies in it.
 Install Anaconda by following these instructions for [Linux](https://conda.io/projects/conda/en/latest/user-guide/install/linux.html) [MacOS](https://conda.io/projects/conda/en/latest/user-guide/install/macos.html)
 [Windows](https://conda.io/projects/conda/en/latest/user-guide/install/windows.html)
 
+2. Clone this repository into your local machine.
 
+3. Create a conda environment
 Create a conda environment
 ```
 conda create -n DEMOS python=3.8
 ```
-5. Install dependencies
+4. Install dependencies
 Activate the created conda environment
 ```
 conda activate DEMOS
 ```
 
-
-You might need to install or update additional build tools.
-For Windows:
-In your terminal window, run:
-```
-conda install -c anaconda libpython m2w64-toolchain
-```
-For Linux/macOS
-In your terminal window, run:
-```
-apt-get update
-
-
-apt-get install -y gcc libhdf5-serial-dev
-```
-
-
-Install the project requirements.
+Install the project dependencies.
 ```
 pip install -r requirements.txt
 ```
 If you run into any issues in setting up your environment, please submit an issue in this repository.
 
-
-6. Download Relevant Data
-
+5. Download Relevant Data
 
 Before running the simulation framework, create a data folder within the main project directory by typing the following in your terminal:
-
 
 ```
 cd DEMOS
@@ -195,74 +203,61 @@ cd DEMOS
 mkdir data
 ```
 
-
-Access the data directory and download the relevant input data using the following:
-
-
-- SF Bay Area
-```
-wget <INPUT_POPULATION_FILEPATH> # Download the input population file for the region
-wget -O bay_area_skims.csv.gz <SKIMS_ILEPATH> # Download the skims file for the region and give it the name bay_area_skims.csv.gz
-```
+Access the data directory and download the relevant input data within the data subfolder, following the folder structure described above:
 
 
 7. Activate environment
 
-
 Activate the created conda environment
-```
-conda activate DEMOS_ENV
-```
-8. Preprocess SKIMS
-Before running any simulations, it's necessary to preprocess the skims files downloaded in Step 5 for your relevant region. To process the skims file, first activate your environment using the following command:
 ```
 conda activate DEMOS
 ```
-Access the main DEMOS project folder and running the skims processing file using the following command:
+
+8. Running Simulation
+To run the DEMOS simulation, use the following command structure from the main DEMOS project folder:
+
 ```
-cd demos_urbansim
-python process_skims.py
+python simulate.py -- -r <region ID> -i <input_year> -y <forecast year> -f <iter year frequency> -rm --initial_run -s -sl -sg  -t <skims source> -b -o
 ```
+The following are all the available arguments for the simulate.py script:
 
-
-9. Running Simulation
-
-
-The general command for running the DEMOS simulation is the following:
-```
-python simulate.py -- -c -cf custom -l -sg -r <region ID> -i <input_year> -y <forecast year> -f <iter year frequency> -ss <skims source> -rm
-```
-
-
-The following are the arguments used in the above command:
 ```
 -r REGION_CODE, --region_code REGION_CODE
-                       region fips code
- -y YEAR, --year YEAR  forecast year to simulate to
- -c, --calibrated      whether to run with calibrated coefficients
- -cf CALIBRATED_FOLDER, --calibrated_folder CALIBRATED_FOLDER
-                       name of the calibration folder to read configs from
- -sg, --segmented      run with segmented LCMs
- -l, --all_local       no cloud access whatsoever
- -i INPUT_YEAR, --input_year INPUT_YEAR
-                       input data (base) year
- -f FREQ_INTERVAL, --freq_interval FREQ_INTERVAL
-                       intra-simulation frequency interval
- -o OUTPUT_FNAME, --output_fname OUTPUT_FNAME
-                       output file name
- -ss SKIM_SOURCE, --skim_source SKIM_SOURCE
-                       skims format, e.g. "beam", "polaris"
- -rm, --random_matching Random matching in the Single to X model to
-                        reduce computational time due to
-                        the matchmaking process
+                        Region FIPS code (e.g., 06197001 for San Francisco Bay Area)
+-i INPUT_YEAR, --input_year INPUT_YEAR
+                        Base year of input data
+-y YEAR, --year YEAR    Forecast year to simulate to
+-f FREQ_INTERVAL, --freq_interval FREQ_INTERVAL
+                        Intra-simulation frequency interval for outputs
+-rm, --random_matching  Use random matching in the marriage model
+--initial_run           Generate calibration/validation charts
+-s RANDOM_SEED, --random_seed RANDOM_SEED
+                        Value to set as random seed
+-sl, --single_level_lcms
+                        Run with single-level Location Choice Models (LCMs)
+-sg, --segmented        Run with segmented Location Choice Models (LCMs)
+-t TRAVEL_MODEL, --travel_model TRAVEL_MODEL
+                        Source of skims data (e.g., beam, polaris)
+-b CAPACITY_BOOST, --capacity_boost CAPACITY_BOOST
+                        Value to multiply capacities during simulation
+-o OUTPUT_FNAME, --output_fname OUTPUT_FNAME
+                        Custom output file name
 ```
-This command will direct the software to the correct input data and configuration files and run the simulation based on the specified parameters. After the simulation is completed, the software will save output data and summary statistics in the output folder. The analyst can then use these saved objects to run any additional analyses necessary.
 
+Here's a basic example using only the DEMOS-relevant options:
 
-10. Simulation results
-The DEMOS simulation will produce the following sets of data and results:
- - A synthetic population file containing the evolved synthetic population throughout the simulation years in `h5` format.
+```
+python simulate.py -r 06197001 -i 2010 -y 2020 -f 2 -rm
+```
 
+This command runs the simulation for the San Francisco Bay Area (region code 06197001), starting from the base year 2010 and forecasting to 2020, with outputs every 2 years. It uses random matching in the marriage model.
 
-The file can be used to generate summary statistics on population characteristics for each of the simulated years.
+For more advanced usage, including additional parameters:
 
+```
+python simulate.py -r 06197001 -i 2010 -y 2020 -f 2 -rm -s 42 -sg -o custom_output -b 1.2
+```
+This command includes all the DEMOS options from the first example, and adds several advanced features. It sets a random seed of 42 for reproducibility, uses segmented Location Choice Models (LCMs) for land use models, specifies a custom output filename, and applies a capacity boost of 1.2 to account for potential growth scenarios. This command will direct the software to the correct input data and configuration files and run the simulation based on the specified parameters. The analyst can then use the saved simulation results to run any additional analyses necessary.
+
+9. Simulation results
+The DEMOS simulation will produce an output file containing the evolved synthetic population throughout the simulation period. This file, named 'model_data_{forecast_year}.h5', contains the synthetic population of each simulated year. It follows the structure of the input `h5` file.

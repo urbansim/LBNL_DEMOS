@@ -971,7 +971,6 @@ def simple_transition(
             df["new_idx"] = None
             df.loc[added, "new_idx"] = new_added
             not_added = df["new_idx"].isnull()
-            # breakpoint()
             df.loc[not_added, "new_idx"] = df.loc[not_added].index.values
             df.set_index("new_idx", inplace=True, drop=True)
             df.index.name = idx_name
@@ -1107,9 +1106,6 @@ def generate_outputs(year, base_year, forecast_year, tracts):
     if not os.path.exists("runs"):
         os.makedirs("./runs")
 
-    if orca.get_injectable("all_local"):
-        return
-
     if year == base_year:
         indicators.export_indicator_definitions()
 
@@ -1164,240 +1160,134 @@ def export_demo_stats(year, forecast_year):
 # -----------------------------------------------------------------------------------------
 # STEP DEFINITION
 # -----------------------------------------------------------------------------------------
+region_code = orca.get_injectable("region_code")
 
-all_local = orca.get_injectable("all_local")
-if orca.get_injectable("running_calibration_routine") == False:
-    region_code = orca.get_injectable("region_code")
+county_ids = orca.get_table("blocks").county_id.unique()
+rdplcm_segments = ["sf", "mf"]
+hlcm_segments = [
+    "own_1p_54less",
+    "own_1p_55plus",
+    "own_2p_54less",
+    "own_2p_55plus",
+    "rent_1p_54less",
+    "rent_1p_55plus",
+    "rent_2p_54less",
+    "rent_2p_55plus",
+]
+elcm_segments = ["0", "1", "2", "3", "4", "5"]
 
-    if not all_local:
-        storage_client = storage.Client("swarm-test-1470707908646")
-        bucket = storage_client.get_bucket("national_block_v2")
-
-    county_ids = orca.get_table("blocks").county_id.unique()
-    rdplcm_segments = ["sf", "mf"]
-    hlcm_segments = [
-        "own_1p_54less",
-        "own_1p_55plus",
-        "own_2p_54less",
-        "own_2p_55plus",
-        "rent_1p_54less",
-        "rent_1p_55plus",
-        "rent_2p_54less",
-        "rent_2p_55plus",
-    ]
-    elcm_segments = ["0", "1", "2", "3", "4", "5"]
-
-    if orca.get_injectable("calibrated") == True:
-        rdplcm_models = []
-        hlcm_models = []
-        elcm_models = []
-        price_models = []
-        if orca.get_injectable("multi_level_lcms") == True:
-            if orca.get_injectable("segmented_lcms") == True:
-                for county_id in county_ids:
-                    rdplcm_models += [
-                        "rdplcm_%s_blocks_%s_pf" % (county_id, segment)
-                        for segment in rdplcm_segments
-                    ]
-                    hlcm_models += [
-                        "hlcm_%s_blocks_%s_pf" % (county_id, segment)
-                        for segment in hlcm_segments
-                    ]
-                    elcm_models += [
-                        "elcm_%s_blocks_%s_pf" % (county_id, segment)
-                        for segment in elcm_segments
-                    ]
-                if len(county_ids) > 1:
-                    rdplcm_models = [
-                        "rdplcm_county_%s_pf" % segment for segment in rdplcm_segments
-                    ] + rdplcm_models
-                    hlcm_models = [
-                        "hlcm_county_%s_pf" % segment for segment in hlcm_segments
-                    ] + hlcm_models
-                    elcm_models = [
-                        "elcm_county_%s_pf" % segment for segment in elcm_segments
-                    ] + elcm_models
-            else:
-                rdplcm_models += [
-                    "rdplcm_%s_blocks_pf" % county_id for county_id in county_ids
-                ]
-                hlcm_models += [
-                    "hlcm_%s_blocks_pf" % county_id for county_id in county_ids
-                ]
-                elcm_models += [
-                    "elcm_%s_blocks_pf" % county_id for county_id in county_ids
-                ]
-                if len(county_ids) > 1:
-                    rdplcm_models = ["rdplcm_county_pf"] + rdplcm_models
-                    hlcm_models = ["hlcm_county_pf"] + hlcm_models
-                    elcm_models = ["elcm_county_pf"] + elcm_models
-        else:
-            if orca.get_injectable("segmented_lcms") == True:
-                rdplcm_models += ["rdplcm_pf_" + segment for segment in rdplcm_segments]
-                hlcm_models += ["hlcm_pf_" + segment for segment in hlcm_segments]
-                elcm_models += ["elcm_pf_" + segment for segment in elcm_segments]
-            else:
-                rdplcm_models += ["rdplcm_pf"]
-                hlcm_models += ["hlcm_pf"]
-                elcm_models += ["elcm_pf"]
-
-        developer_models = ["supply_transition"] + rdplcm_models
-        household_models = (
-            ["household_transition"] + ["households_relocation_basic"] + hlcm_models
-        )
-        employment_models = ["job_transition"] + elcm_models
-        location_models = rdplcm_models + hlcm_models + elcm_models
-        calibrated_folder = orca.get_injectable("calibrated_folder")
-        region_type = orca.get_injectable("region_type")
-        remote_configs_path = "calibrated_configs/%s/%s" % (
-            calibrated_folder,
-            region_code,
-        )
-        if calibrated_folder == "custom":
-            remote_configs_path = "calibrated_configs/custom/custom_%s_%s" % (
-                region_type,
-                region_code,
-            )
-        local_configs_path = "calibrated_configs"
-        if orca.get_injectable("local_simulation") is True:
-            local_configs_path = os.path.join(
-                local_configs_path, calibrated_folder, region_code
-            )
-            skim_source = orca.get_injectable("skim_source")
-            if os.path.exists(os.path.join("configs", local_configs_path, skim_source)):
-                local_configs_path = os.path.join(local_configs_path, skim_source)
-        if not os.path.exists("configs/" + local_configs_path):
-            os.makedirs("./configs/" + local_configs_path)
-        for f in location_models:
-            if not all_local:
-                print(
-                    "Downloading %s config from calibrated_configs/%s"
-                    % (f, calibrated_folder)
-                )
-                blob = bucket.get_blob("%s/%s.yaml" % (remote_configs_path, f))
-                blob.download_to_filename(
-                    "./configs/%s/%s.yaml" % (local_configs_path, f)
-                )
-            else:
-                if not os.path.exists("./configs/%s/%s.yaml" % (local_configs_path, f)):
-                    raise OSError(
-                        "No model config found at ./configs/%s/%s.yaml"
-                        % (local_configs_path, f)
-                    )
-
-        for model in ["value", "rent"]:
-            print("Checking if %s configs exist" % model)
-            model_name = "repm_residential_%s" % model
-            if not all_local:
-                blob = bucket.blob("%s/%s.yaml" % (remote_configs_path, model_name))
-                if blob.exists():
-                    print("Downloading %s" % model_name)
-                    blob.download_to_filename(
-                        "./configs/%s/%s.yaml" % (local_configs_path, model_name)
-                    )
-                    price_models += [model_name]
-            else:
-                if os.path.exists(
-                    "./configs/%s/%s.yaml" % (local_configs_path, model_name)
-                ):
-                    price_models += [model_name]
-
+rdplcm_models = []
+hlcm_models = []
+elcm_models = []
+price_models = []
+if orca.get_injectable("multi_level_lcms") == True:
+    if orca.get_injectable("segmented_lcms") == True:
+        for county_id in county_ids:
+            rdplcm_models += [
+                "rdplcm_%s_blocks_%s_pf" % (county_id, segment)
+                for segment in rdplcm_segments
+            ]
+            hlcm_models += [
+                "hlcm_%s_blocks_%s_pf" % (county_id, segment)
+                for segment in hlcm_segments
+            ]
+            elcm_models += [
+                "elcm_%s_blocks_%s_pf" % (county_id, segment)
+                for segment in elcm_segments
+            ]
+        if len(county_ids) > 1:
+            rdplcm_models = [
+                "rdplcm_county_%s_pf" % segment for segment in rdplcm_segments
+            ] + rdplcm_models
+            hlcm_models = [
+                "hlcm_county_%s_pf" % segment for segment in hlcm_segments
+            ] + hlcm_models
+            elcm_models = [
+                "elcm_county_%s_pf" % segment for segment in elcm_segments
+            ] + elcm_models
     else:
-        rdplcm_models = ["rdplcm" + segment for segment in rdplcm_segments]
-        hlcm_models = ["hlcm" + segment for segment in hlcm_segments]
-        elcm_models = ["elcm" + segment for segment in elcm_segments]
-        developer_models = ["supply_transition"] + [
-            "rdplcm" + str(segment) for segment in range(0, 4)
+        rdplcm_models += [
+            "rdplcm_%s_blocks_pf" % county_id for county_id in county_ids
         ]
-        household_models = (
-            ["household_transition"]
-            + ["households_relocation_basic"]
-            + ["hlcm" + str(segment) for segment in range(1, 11)]
-        )
-        employment_models = ["job_transition"] + [
-            "elcm" + str(segment) for segment in range(0, 6)
+        hlcm_models += [
+            "hlcm_%s_blocks_pf" % county_id for county_id in county_ids
         ]
-        location_models = rdplcm_models + hlcm_models + elcm_models
-        price_models = [
-            region_code + "_pred_bg_median_rent",
-            region_code + "_pred_bg_median_value",
+        elcm_models += [
+            "elcm_%s_blocks_pf" % county_id for county_id in county_ids
         ]
-
-        if not os.path.exists("configs/estimated_configs"):
-            os.makedirs("./configs/estimated_configs")
-        for f in location_models:
-            if not all_local:
-                print("Downloading %s config from estimated_configs" % f)
-                blob = bucket.get_blob(
-                    "estimated_configs/us/%s/%s.yaml" % (region_code, f)
-                )
-                blob.download_to_filename("./configs/estimated_configs/%s.yaml" % f)
-            else:
-                if not os.path.exists("./configs/estimated_configs/%s.yaml" % f):
-                    raise OSError(
-                        "No model config found at ./configs/estimated_configs/%s.yaml"
-                        % f
-                    )
-
-    if orca.get_injectable("local_simulation") == True:
-        add_variables = ["add_temp_variables"]
-        start_of_year_models = ["status_report"]
-        demo_models = [
-            # "aging",
-            "laborforce_participation",
-            "households_reorg",
-            "kids_moving",
-            "mortality",
-            "household_birth",
-            "education",
-        ]
-        pre_processing_steps = price_models + [
-            "build_networks",
-            "generate_outputs",
-            "update_travel_data",
-        ]
-        rem_variables = ["remove_temp_variables"]
-        export_demo_steps = ["export_demo_stats"]
-        school_models = ["school_location"]
-        end_of_year_models = ["generate_outputs"]
-        work_models = ["work_location"]
-        income_models = ["income_model"]
-        in_out_migration = ["household_transition"]
-        steps_all_years = (
-            add_variables
-            + start_of_year_models
-            + demo_models
-            + in_out_migration
-            + work_models
-            + school_models
-            # + price_models
-            # + developer_models
-            # + household_models
-            + employment_models
-            + income_models
-            + end_of_year_models
-            + export_demo_steps
-        )
+        if len(county_ids) > 1:
+            rdplcm_models = ["rdplcm_county_pf"] + rdplcm_models
+            hlcm_models = ["hlcm_county_pf"] + hlcm_models
+            elcm_models = ["elcm_county_pf"] + elcm_models
+else:
+    if orca.get_injectable("segmented_lcms") == True:
+        rdplcm_models += ["rdplcm_pf_" + segment for segment in rdplcm_segments]
+        hlcm_models += ["hlcm_pf_" + segment for segment in hlcm_segments]
+        elcm_models += ["elcm_pf_" + segment for segment in elcm_segments]
     else:
-        start_of_year_models = [
-            "status_report",
-            "skim_swapper",
-            "scheduled_development_events_model",
-        ]
-        end_of_year_models = ["adjustment_model", "generate_outputs"]
-        pre_processing_steps = (
-            ["scenario_definition", "scheduled_development_events_model"]
-            + price_models
-            + ["build_networks", "skim_swapper", "generate_outputs"]
+        rdplcm_models += ["rdplcm_pf"]
+        hlcm_models += ["hlcm_pf"]
+        elcm_models += ["elcm_pf"]
+
+developer_models = ["supply_transition"] + rdplcm_models
+household_models = (
+    ["household_transition"] + ["households_relocation_basic"] + hlcm_models
+)
+employment_models = ["job_transition"] + elcm_models
+location_models = rdplcm_models + hlcm_models + elcm_models
+
+for f in location_models:
+    if not os.path.exists("./configs/%s/%s.yaml" % (region_code, f)):
+        raise OSError(
+            "No model config found at ./configs/%s/%s.yaml"
+            % (region_code, f)
         )
-        steps_all_years = (
-            start_of_year_models
-            + price_models
-            + developer_models
-            + household_models
-            + employment_models
-            + end_of_year_models
-        )
-    orca.add_injectable("sim_steps", steps_all_years)
-    orca.add_injectable("pre_processing_steps", pre_processing_steps)
-    orca.add_injectable("export_demo_stats", export_demo_steps)
+
+for model in ["value", "rent"]:
+    print("Checking if %s configs exist" % model)
+    model_name = "repm_residential_%s" % model
+    if os.path.exists("./configs/%s/%s.yaml" % (region_code, model_name)):
+        price_models += [model_name]
+
+add_variables = ["add_temp_variables"]
+start_of_year_models = ["status_report"]
+demo_models = [
+    # "aging",
+    "laborforce_participation",
+    "households_reorg",
+    "kids_moving",
+    "mortality",
+    "household_birth",
+    "education",
+]
+pre_processing_steps = price_models + [
+    "build_networks",
+    "generate_outputs",
+    "update_travel_data",
+]
+rem_variables = ["remove_temp_variables"]
+export_demo_steps = ["export_demo_stats"]
+school_models = ["school_location"]
+end_of_year_models = ["generate_outputs"]
+work_models = ["work_location"]
+income_models = ["income_model"]
+in_out_migration = ["household_transition"]
+steps_all_years = (
+    add_variables
+    + start_of_year_models
+    + demo_models
+    + in_out_migration
+    + work_models
+    + school_models
+    # + price_models
+    # + developer_models
+    # + household_models
+    + employment_models
+    + income_models
+    + end_of_year_models
+    + export_demo_steps
+)
+
+orca.add_injectable("sim_steps", steps_all_years)
+orca.add_injectable("pre_processing_steps", pre_processing_steps)
+orca.add_injectable("export_demo_stats", export_demo_steps)

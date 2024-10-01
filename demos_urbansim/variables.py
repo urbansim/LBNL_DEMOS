@@ -2176,15 +2176,13 @@ def to_zone_id(job_flows, blocks):
 #     return dict_
 
 @orca.injectable()
-def mode_choice_template(region_code, calibrated_folder):
+def mode_choice_template(region_code):
     """
     Loads the mode choice template from the calibrated config folder.
     """
 
     calibrated_path = os.path.join(
         'configs',
-        'calibrated_configs/',
-        calibrated_folder,
         region_code,
         'mode_choice',
         'mode_choice_logsum.yaml')

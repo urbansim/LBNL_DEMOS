@@ -15,68 +15,29 @@ from urbansim_templates.models import LargeMultinomialLogitStep, OLSRegressionSt
 print("importing datasources")
 
 # -----------------------------------------------------------------------------------------
-# UC SIMULATIONS: ADDS SPECIAL SCENARIO INJECTABLES FROM NOTES
-# -----------------------------------------------------------------------------------------
-scenario_data = glob.glob("./data/scenario_data*")
-if len(scenario_data) > 0:
-    with open(scenario_data[0]) as f:
-        scenario = yaml.load(f, Loader=yaml.FullLoader)
-    if scenario["notes"] is not None and scenario["notes"] != "":
-        print("Extracting relevant information from scenario notes")
-        settings = eval(scenario["notes"])["settings"]
-        if "calibrated_folder" in settings.keys():
-            orca.add_injectable("calibrated_folder", settings["calibrated_folder"])
-        if "initial_run" in settings.keys():
-            orca.add_injectable("initial_run", eval(settings["initial_run"]))
-        if "multi_level_lcms" in settings.keys():
-            orca.add_injectable("multi_level_lcms", eval(settings["multi_level_lcms"]))
-        if "segmented_lcms" in settings.keys():
-            orca.add_injectable("segmented_lcms", eval(settings["segmented_lcms"]))
-        if "capacity_boost" in settings.keys():
-            orca.add_injectable("capacity_boost", settings["capacity_boost"])
-        if "database_control_totals" in settings.keys():
-            orca.add_injectable(
-                "use_database_control_totals", eval(settings["database_control_totals"])
-            )
-
-# -----------------------------------------------------------------------------------------
 # DOWNLOADS DATA FOR REGION
 # -----------------------------------------------------------------------------------------
-all_local = orca.get_injectable("all_local")
-if not all_local:
-    storage_client = storage.Client("swarm-test-1470707908646")
-    bucket = storage_client.get_bucket("national_block_v2")
-
-    if orca.get_injectable("local_simulation") == False:
-        uc_region_code = orca.get_injectable("mpo_id")
-        blob = bucket.get_blob("base_data/us/uc_database/regions.csv")
-        blob.download_to_filename("configs/regions.csv")
-        regions = pd.read_csv(
-            "configs/regions.csv", dtype={"region_id": object, "uc_id": object}
-        )
-        regions = regions[~regions["uc_id"].isnull()].set_index("uc_id")
-        uc_region_dict = regions.to_dict()["region_id"]
-        print("URBANCANVAS REGION CODE", uc_region_code)
-        print("BLOCK MODEL V2 REGION CODE", uc_region_dict[uc_region_code])
-        orca.add_injectable("region_code", uc_region_dict[uc_region_code])
 
 region_code = orca.get_injectable("region_code")
-calibrated_folder = orca.get_injectable("calibrated_folder")
 print("importing datasources for region %s" % region_code)
 
-if len(region_code) == 2:
-    region_type = "state"
-elif len(region_code) == 5:
-    region_type = "county_id"
-elif len(region_code) == 8:
-    region_type = "mpo"
-else:
-    region_type = "region"
-orca.add_injectable("region_type", region_type)
-data_name = "%s_%s_model_data.h5" % (region_type, region_code)
-if calibrated_folder == "custom":
-    data_name = "custom_%s" % (data_name)
+def get_region_type_and_data_name(region_code):
+    if len(region_code) == 2:
+        region_type = "state"
+    elif len(region_code) == 5:
+        region_type = "county_id"
+    elif len(region_code) == 8:
+        region_type = "mpo"
+    else:
+        region_type = "region"
+    
+    data_name = "custom_%s_%s_model_data.h5" % (region_type, region_code)
+    if not os.path.exists("data/%s" % data_name):
+        raise OSError("No input data found at data/%s" % data_name)
+    return data_name, region_type
 
+data_name, region_type = get_region_type_and_data_name(region_code)
+orca.add_injectable("region_type", region_type)
 orca.add_injectable("data_name", data_name)
 print(data_name)
 
@@ -111,18 +72,6 @@ def load_calibration_data(region_code):
 # Load calibration data
 load_calibration_data(region_code)
 
-
-if not all_local:
-    if not os.path.exists("data/%s" % data_name):
-        print("Downloading model_data from ", "model_data/%s" % data_name)
-        blob = bucket.get_blob("model_data/%s" % data_name)
-        blob.download_to_filename("./data/%s" % data_name)
-        print("Download of model_data.h5 file done")
-    else:
-        print("Not downloading model_data.h5, since already exists")
-else:
-    if not os.path.exists("data/%s" % data_name):
-        raise OSError("No input data found at data/%s" % data_name)
 
 # -----------------------------------------------------------------------------------------
 # LOADS ORCA TABLES FROM H5 FILE
@@ -250,58 +199,23 @@ orca.add_table("income_dist", income_dist)
 # -----------------------------------------------------------------------------------------
 # DOWNLOADS CUSTOM SETTINGS IF AVAILABLE
 # -----------------------------------------------------------------------------------------
+# Custom settings, useful for the definition of time-based accessibility variables
+print("Checking if custom_settings.yaml file exists")
+try:
+    with open("configs/custom_settings.yaml") as f:
+        custom_settings = yaml.load(f, Loader=yaml.FullLoader)
+    orca.add_injectable("custom_settings", custom_settings)
+except OSError:
+    raise OSError("No settings found at configs/custom_settings.yaml")
 
-if calibrated_folder == "custom":
-    # Custom settings, useful for the definition of time-based accessibility variables
-    print("Checking if custom_settings.yaml file exists")
-    if not all_local:
-        blob = bucket.blob(
-            "calibrated_configs/custom/custom_%s_%s/custom_settings.yaml"
-            % (region_type, region_code)
-        )
-        if blob.exists():
-            print("Downloading custom_settings.yaml")
-            blob.download_to_filename("configs/custom_settings.yaml")
-            with open("configs/custom_settings.yaml") as f:
-                custom_settings = yaml.load(f, Loader=yaml.FullLoader)
-            orca.add_injectable("custom_settings", custom_settings)
-    else:
-        try:
-            with open("configs/custom_settings.yaml") as f:
-                custom_settings = yaml.load(f, Loader=yaml.FullLoader)
-            orca.add_injectable("custom_settings", custom_settings)
-        except OSError:
-            raise OSError("No settings found at configs/custom_settings.yaml")
-
-    # Custom output parameters, useful when variables change from default
-    print("Checking if custom output_parameters.yaml file exists")
-    if not all_local:
-        blob = bucket.blob(
-            "calibrated_configs/custom/custom_%s_%s/output_parameters.yaml"
-            % (region_type, region_code)
-        )
-        if blob.exists():
-            print("Downloading custom output_parameters.yaml")
-            blob.download_to_filename("configs/output_parameters.yaml")
-    else:
-        if not os.path.exists("configs/output_parameters.yaml"):
-            raise OSError("No settings found at configs/output_parameters.yaml")
-
-    # Custom calibration settings, useful to refine specifications
-    if orca.get_injectable("running_calibration_routine") is True:
-        print("Checking if custom pf_vars.yaml file exists")
-
-        if not all_local:
-            blob = bucket.blob(
-                "calibrated_configs/custom/custom_%s_%s/pf_vars.yaml"
-                % (region_type, region_code)
-            )
-            if blob.exists():
-                print("Downloading custom pf_vars.yaml")
-                blob.download_to_filename("pf_vars.yaml")
-        else:
-            if not os.path.exists("pf_vars.yaml"):
-                raise OSError("No settings found at ./pf_vars.yaml")
+# Custom output parameters, useful when variables change from default
+print("Checking if output_parameters.yaml file exists")
+try:
+    with open("configs/output_parameters.yaml") as f:
+        output_parameters = yaml.load(f, Loader=yaml.FullLoader)
+    orca.add_injectable("output_parameters", output_parameters)
+except OSError:
+    raise OSError("No settings found at configs/output_parameters.yaml")
 
 # -----------------------------------------------------------------------------------------
 # ADDS AGGREGATION TABLES
@@ -625,26 +539,15 @@ blocks_districts["unified_district"] = np.where(
 blocks_districts["district_by_school_level"] = blocks_districts.apply(
     lambda row: (row["district_id"], row["school_level"]), axis=1
 )
-# breakpoint()
 blocks_districts = blocks_districts.merge(geoid_to_zone, how="left", on=["block_id"])
-# breakpoint()
 blocks_districts = blocks_districts.rename(columns={"zone_id": "school_taz"})
-# breakpoint()
 blocks_districts["school_block_id"] = blocks_districts["block_id"].copy()
-# breakpoint()
-
 schools_df["CAP_TOTAL_INC"] = schools_df["CAP_TOTAL"] * 1.2
-# breakpoint()
 schools_df["REM_CAP"] = schools_df["CAP_TOTAL_INC"]
-# breakpoint()
 schools_df["block_id"] = ["0" + str(x) for x in schools_df["GEOID10"]]
-# breakpoint()
 schools_df["district_id"] = ["0" + str(x) for x in schools_df["NCESDist"]]
-# breakpoint()
 schools_df["school_id"] = schools_df["SCHOOL_ID"].copy()
-# breakpoint()
 schools_df = schools_df[~(schools_df["school_id"] == "0000000")].copy()
-# breakpoint()
 
 orca.add_table("blocks_districts", blocks_districts)
 orca.add_table("geoid_to_zone", geoid_to_zone)
@@ -674,16 +577,11 @@ def read_yaml(path):
 
 
 region_code = orca.get_injectable("region_code")
-calibrated_folder = orca.get_injectable("calibrated_folder")
 skim_source = orca.get_injectable("skim_source")
-calibrated_path = os.path.join("calibrated_configs/", calibrated_folder, region_code)
-if os.path.exists(os.path.join("configs", calibrated_path, skim_source)):
-    calibrated_path = os.path.join(calibrated_path, skim_source)
-configs_folder = (
-    "configs/" + calibrated_path
-    if orca.get_injectable("calibrated")
-    else "estimated_configs"
-)
+
+configs_folder = os.path.join("configs", region_code)
+if os.path.exists(os.path.join(configs_folder, skim_source)):
+    configs_folder = os.path.join(configs_folder, skim_source)
 
 marriage_model = read_yaml(configs_folder + "/demos_single_to_x.yaml")
 cohabitation_model = read_yaml(configs_folder + "/demos_cohabitation_to_x.yaml")
