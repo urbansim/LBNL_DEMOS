@@ -971,7 +971,6 @@ def simple_transition(
             df["new_idx"] = None
             df.loc[added, "new_idx"] = new_added
             not_added = df["new_idx"].isnull()
-            # breakpoint()
             df.loc[not_added, "new_idx"] = df.loc[not_added].index.values
             df.set_index("new_idx", inplace=True, drop=True)
             df.index.name = idx_name

@@ -539,26 +539,15 @@ blocks_districts["unified_district"] = np.where(
 blocks_districts["district_by_school_level"] = blocks_districts.apply(
     lambda row: (row["district_id"], row["school_level"]), axis=1
 )
-# breakpoint()
 blocks_districts = blocks_districts.merge(geoid_to_zone, how="left", on=["block_id"])
-# breakpoint()
 blocks_districts = blocks_districts.rename(columns={"zone_id": "school_taz"})
-# breakpoint()
 blocks_districts["school_block_id"] = blocks_districts["block_id"].copy()
-# breakpoint()
-
 schools_df["CAP_TOTAL_INC"] = schools_df["CAP_TOTAL"] * 1.2
-# breakpoint()
 schools_df["REM_CAP"] = schools_df["CAP_TOTAL_INC"]
-# breakpoint()
 schools_df["block_id"] = ["0" + str(x) for x in schools_df["GEOID10"]]
-# breakpoint()
 schools_df["district_id"] = ["0" + str(x) for x in schools_df["NCESDist"]]
-# breakpoint()
 schools_df["school_id"] = schools_df["SCHOOL_ID"].copy()
-# breakpoint()
 schools_df = schools_df[~(schools_df["school_id"] == "0000000")].copy()
-# breakpoint()
 
 orca.add_table("blocks_districts", blocks_districts)
 orca.add_table("geoid_to_zone", geoid_to_zone)
